@@ -47,6 +47,18 @@ All hard dependencies can be re_writed as a soft dependency (using local files o
 
 This library will help you get through all those challenges if you use it wisely, i really hope that this helps someone with a real world problem. 
 
+
+## Why do we need DAGs
+
+This is a hard question... after all all your processes might be ok. But i will try to explain the main reason with one example:
+
+![Motivation](resource_readme/resource_readme.png)
+
+Unless you are using DAGs there is a high posibility that you are following the lineal DAG.. but thats inneficient, there is a high possibility that you have a lot of processes that can run in parallel thats why DAGs are so useful, they do not only give us one execution order, they also help us realize which task can be paralellized... and of course this library implements thats using threads (we can define the maximum number of threads with the paramater max_concurrency in the DAG constructor)
+
+
+
+
 ## How to use this library 
 
 As we said in the definition a DAG is a list of tasks, and each node is a task with some dependencies (or none)... basically we can create a dag following that idea.
