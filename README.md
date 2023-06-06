@@ -2,6 +2,18 @@
 
 This library heavily inspired this package: https://github.com/mindee/tawazi, and a little bit by Airflow.
 
+
+## Easy install using pypi
+You can easily install this in a separate conda envioronment with the following:
+
+```bash
+conda create -n easydags python=3.10 -y
+conda activate easydags
+pip install easydags
+```
+
+Now you can run your DAG's on your local envioronment
+
 ## Define a DAG
 
 Maybe all of you already know what a Directed Acyclic Graph (DAG) is..., but please think about this definition when using this library:
@@ -272,3 +284,161 @@ node = ExecNode(id_= 'id',
               n_trials= 3 # set number of trials
               )
 ```
+
+
+## Deploying your DAGs
+
+#### Deploying on serverless (GCP example)
+
+Basically the idea is that you can run one API where each endpoint is a different dag... as an example you can have the following api_example.py
+
+```python 
+
+from fastapi import FastAPI
+from easydags import  ExecNode, DAG
+import time
+
+app = FastAPI()
+
+
+@app.get("/dag1")
+async def dag1():
+
+    nodes = []
+
+
+    def example0():
+        print('beginning 0')
+        time.sleep(3)
+        print('end 0')
+        return 4
+
+    nodes.append( ExecNode(id_= 'f0',
+                exec_function = example0
+                ) )  
+
+    def example1(**kwargs):
+        f0_result = kwargs['f0_result']
+        print('beginning 1')
+        print('end 1')
+        print(f0_result + 8 )
+
+    nodes.append( ExecNode(id_= 'f1',
+                exec_function = example1 ,
+                depends_on_hard= ['f0']
+                ) )   
+
+
+
+    
+    dag = DAG(nodes,name = 'Example DAG hard dependency',max_concurrency=8, debug = False)
+
+    dag.execute()
+
+    #DO SOMETHING WITH "Example DAG hard dependency_states_run.html" in case you need it
+
+    return {"message": "Updated!"}
+
+@app.get("/dag2")
+async def dag2():
+
+    nodes = []
+    def prepro():
+        print('beginning pre pro')
+        time.sleep(3)
+        print('end pre pro')
+        return 'df with cool features'
+
+
+
+    nodes.append( ExecNode(id_= 'pre_process',
+                exec_function = prepro,
+                output_name = 'my_cool_df'
+                ) )  
+
+
+    def model1(**kwargs):
+        df = kwargs['my_cool_df']
+        
+        print(f'i am using {df} in model 1')
+        time.sleep(3)
+        print('finish training model1')
+        
+        return 'model 1 37803'
+
+    nodes.append( ExecNode(id_= 'model1',
+                exec_function = model1 ,
+                depends_on_hard= ['pre_process'],
+                output_name = 'model1'
+                ) )   
+
+
+
+    def model2(**kwargs):
+        df = kwargs['my_cool_df']
+        
+        print(f'i am using {df} in model 2')
+        time.sleep(3)
+        print('finished training model2')
+        
+        return 'model 2 78373'
+
+    nodes.append( ExecNode(id_= 'model2',
+                exec_function = model2 ,
+                depends_on_hard= ['pre_process'],
+                output_name = 'model2'
+                ) )  
+
+
+
+    def ensemble(**kwargs):
+        model1 = kwargs['model1']
+        model2 = kwargs['model2']
+        
+        result = f'{model1} and {model2}'
+        
+        print(result)
+        
+        return result 
+
+    nodes.append( ExecNode(id_= 'ensemble',
+                exec_function = ensemble ,
+                depends_on_hard= ['model1','model2'],
+                output_name = 'ensemble'
+                ) )  
+
+
+
+    dag = DAG(nodes,name = 'Ensemble example',max_concurrency=3, debug = False)
+
+    dag.execute()
+
+    return {"message": "Updated!"}
+
+@app.get("/ready")
+async def ready():
+    return {"ready"}
+
+```
+
+Then you can deploy your API on Cloud Run and schedule your DAGs with cloud scheduler (calling desired enpoint on the cloud run service).
+
+For ease of reading the example i added the complete dag definition and execution in the same file... but in reality you can import the definition and execution from a module.
+
+You can test this on your local machine following this steps:
+
+1. Install uvicorn and fastapi (you can do it with pip)
+2. Run the app with "uvicorn api_example:app --reload"
+3. Go to http://127.0.0.1:8000/dag1 or http://127.0.0.1:8000/dag2 and check the logs
+
+
+#### Deploying on serverless (GCP example)
+
+Basically the idea here is that you can create a different conda envioronment for each dag (or just one... do what you need here) and create bash script that:
+
+1. Activate the conda envioronment
+2. Run a python script with your dag
+
+After that you can use cronjobs to schedule your dags (please read how to use crontab -e on linux)
+
+You will need to to make the bash and python script executables with chmod +x {file}
