@@ -3,4 +3,6 @@ requires = [
     "setuptools>=42",
     "wheel"
 ]
+readme = "README.md"
+requires-python = "=3.10"
 build-backend = "setuptools.build_meta"

@@ -130,3 +130,6 @@ dmypy.json
 
 # ona images
 *.html
+
+
+publish.txt
