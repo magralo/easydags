@@ -72,6 +72,7 @@ As we said in the definition a DAG is a list of tasks, and each node is a task w
 
 Here are some examples:
 
+#### Defining a DAG with Soft Dependencies
 
 ```python
 from easydags import  ExecNode, DAG #import some useful classes
@@ -111,8 +112,166 @@ dag.execute() # execute the dag
 ```
 
 
+#### Defining a DAG with Hard Dependencies
+
+```python
+
+from easydags import  ExecNode, DAG
+import time
+
+nodes = []
 
 
+def example0():
+    print('beginning 0')
+    time.sleep(3)
+    print('end 0')
+    return 8
+
+
+
+nodes.append( ExecNode(id_= 'f0',
+              exec_function = example0,
+              output_name = 'my_cool_varname' #we define how to retrieve this result in the following nodes with a hard dependency... if we do not define this the defaul name is {self.id_}_result
+              ) )  
+
+
+def example1(**kwargs):#result from previous nodes will be passed as kwargs 
+    f0_result = kwargs['my_cool_varname'] #You just access to the variable that you want with the output name of the dedired node
+    print('beginning 1')
+    print('end 1')
+    print(f0_result + 8 )
+
+nodes.append( ExecNode(id_= 'f1',
+              exec_function = example1 ,
+              depends_on_hard= ['f0'],
+              n_trials= 3
+              ) )   
+
+    
+dag = DAG(nodes,max_concurrency=2) #Create the DAG as the list of nodes
+
+dag.execute() # execute the dag
+
+```
+
+
+#### Defining the simple ensemble
+
+``` python
+from easydags import  ExecNode, DAG
+import time
+
+nodes = []
+
+
+def prepro():
+    print('beginning pre pro')
+    time.sleep(3)
+    print('end pre pro')
+    return 'df with cool features'
+
+
+
+nodes.append( ExecNode(id_= 'pre_process',
+              exec_function = prepro,
+              output_name = 'my_cool_df'
+              ) )  
+
+
+def model1(**kwargs):
+    df = kwargs['my_cool_df']
+    
+    print(f'i am using {df} in model 1')
+    time.sleep(3)
+    print('finish training model1')
+    
+    return 'model 1 37803'
+
+nodes.append( ExecNode(id_= 'model1',
+              exec_function = model1 ,
+              depends_on_hard= ['pre_process'],
+              output_name = 'model1'
+              ) )   
+
+
+
+def model2(**kwargs):
+    df = kwargs['my_cool_df']
+    
+    print(f'i am using {df} in model 2')
+    time.sleep(3)
+    print('finished training model2')
+    
+    return 'model 2 78373'
+
+nodes.append( ExecNode(id_= 'model2',
+              exec_function = model2 ,
+              depends_on_hard= ['pre_process'],
+              output_name = 'model2'
+              ) )  
+
+
+
+def ensemble(**kwargs):
+    model1 = kwargs['model1']
+    model2 = kwargs['model2']
+    
+    result = f'{model1} and {model2}'
+    
+    print(result)
+    
+    return result 
+
+nodes.append( ExecNode(id_= 'ensemble',
+              exec_function = ensemble ,
+              depends_on_hard= ['model1','model2'],
+              output_name = 'ensemble'
+              ) )  
+
+
+
+dag = DAG(nodes,name = 'Ensemble example',max_concurrency=3, debug = False)
+
+dag.execute()
+```
+Please note that we can check the logs to verify that model 1 and model ran in paralallel
+
+![Motivation](resource_readme/concurrence_check.png)
+
+
+
+#### Checking the html output
+
+One of the coolest features of airflow is that once you've built your DAG you can see it on their UI and you can also check the states of the latest run!
+
+Well, my friend, we can do it here too.
+
+
+When you create the dag object you can name the DAG as you want (by defaul the name is DAG) and easydags will create a html file name {self.name}_states_run.html you can see there the following:
+
+1. The current structure
+2. Datetime of last execution 
+3. States of each node:
+    - Green: ok
+    - Red: It failed
+    - Gray: Did not run because one of their dependencies failed
+
+
+![Motivation](resource_readme/html_output.png)
+
+
+#### One last cool feature: Number of trials
+
+There are some cases where simply running your task again is enough... thats why we implemented this feature, We can set number of trials with the parameters n_trials in the creations of each node.
+
+```python
+
+node = ExecNode(id_= 'id',
+              exec_function = function ,
+              n_trials= 3 # set number of trials
+              )
+```
 
 
 
