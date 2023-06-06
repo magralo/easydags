@@ -12,7 +12,7 @@ import traceback
 
 from .errors import ErrorStrategy
 from .node import ExecNode
-
+from datetime import datetime
 
 # todo remove dependency on DiGraph!
 class DiGraphEx(nx.DiGraph):
@@ -176,11 +176,9 @@ class DAG:
         Args:
             exec_nodes: all the ExecNodes
             max_concurrency: the maximal number of threads running in parallel
-            logger: the inferfwk logger name
-            behavior: specify the behavior if an ExecNode raises an Error. Three option are currently supported:
-                1. DAG.STRICT: stop the execution of all the DAG
-                2. DAG.ALL_CHILDREN: do not execute all children ExecNodes, and continue execution of the DAG
-                2. DAG.PERMISSIVE: continue execution of the DAG and ignore the error
+            name: Name of the dag, will be usefull for creating the html output
+            degub: weather or not you want degub messages
+
         """
         self.graph_ids = DiGraphEx()
     
@@ -287,7 +285,7 @@ class DAG:
             # assign the new leaf nodes
             leaf_ids = graph_ids.leaf_nodes()
 
-    def __draw(self,name='Graph', k: float = 0.8, display: bool = True, t: int = 3) -> None:
+    def _draw(self,name='Graph', k: float = 0.8, display: bool = True, t: int = 3) -> None:
         """
         Draws the Networkx directed graph.
         Args:
@@ -331,7 +329,12 @@ class DAG:
         for f in  list(pos.keys()):
             state = aux[f].result['state']
             m = aux[f].result['message']
+            initial = aux[f].result['initial_time']
+            final = aux[f].result['final_time']
+            duration = aux[f].result['duration']
             title = f'''id: {f}
+                        started at: {initial} and finished at {final}
+                        exec_time: {duration}
                         state: {state}
                         message: {m}'''
             titles.append(title)
@@ -518,7 +521,10 @@ class DAG:
                     continue
 
                 # 5.1 submit the exec node to the executor
-                exec_future = executor.submit(exec_node.execute, node_dict=node_dict, debug = self.debug)
+                exec_future = executor.submit(exec_node.execute, 
+                                              node_dict=node_dict, 
+                                              debug = self.debug,
+                                              initial_time = datetime.now().strftime("%Y-%m-%d, %H:%M:%S"))
                 running.add(exec_future)
                 futures[exec_node.id] = exec_future
 
@@ -528,7 +534,7 @@ class DAG:
                     wait(futures.values(), return_when=ALL_COMPLETED)
         self.node_dict = node_dict
 
-        self.__draw()
+        self._draw()
 
         states = [node_dict[x].result['state'] for x in node_dict]
 

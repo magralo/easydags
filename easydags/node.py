@@ -13,7 +13,7 @@ from .config import Cfg
 # a temporary variable used to pass in exec_nodes to the DAG during building
 exec_nodes: List["ExecNode"] = []
 exec_nodes_lock = Lock()
-
+from datetime import datetime
 
 class ExecNode:
     """
@@ -82,7 +82,10 @@ class ExecNode:
         return isinstance(self.depends_on, list)
 
     # this is breaking change however
-    def execute(self, node_dict: Dict[Hashable, "ExecNode"], debug: bool = True) -> Optional[Dict[str, Any]]:
+    def execute(self, 
+                node_dict: Dict[Hashable, "ExecNode"], 
+                debug: bool = True,
+                initial_time: str = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")) -> Optional[Dict[str, Any]]:
         """
         Execute the ExecNode directly or according to an execution graph.
         Args:
@@ -91,6 +94,7 @@ class ExecNode:
 
         Returns: the result of the execution of the current ExecNode
         """
+        logger.info(f"Start executing {self.id} at {initial_time}")
         # 1. fabricate the arguments for this ExecNode
         if debug:
             logger.debug(f"Start executing {self.id} with task {self.exec_function}")
@@ -159,7 +163,11 @@ class ExecNode:
         
             
 
-
+        result['initial_time'] = initial_time
+        final = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
+        result['final_time'] = final
+        result['duration'] = (datetime.strptime(initial_time,"%Y-%m-%d, %H:%M:%S")-datetime.strptime(final,"%Y-%m-%d, %H:%M:%S")).total_seconds()
+        result['duration'] = str(-int(result['duration']))+ ' sec'
         self.result = result
 
         # 3. useless return value
