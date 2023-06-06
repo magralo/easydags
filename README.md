@@ -1,1 +1,1 @@
-# easydags
+#Easydags: DAGs made easy
