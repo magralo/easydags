@@ -170,7 +170,8 @@ class DAG:
         exec_nodes: List[ExecNode],
         name: str = 'DAG',
         max_concurrency: int = 1,
-        debug: bool = True
+        debug: bool = True,
+        error_type_fatal: bool = True
     ):
         """
         Args:
@@ -185,6 +186,8 @@ class DAG:
         self.name = name
 
         self.debug = debug
+
+        self.error_type_fatal = error_type_fatal
         # since ExecNodes are modified they must be copied
         self.exec_nodes = exec_nodes
 
@@ -538,60 +541,20 @@ class DAG:
 
         states = [node_dict[x].result['state'] for x in node_dict]
 
-        if min(states)!=1:
+        if (min(states)!=1) and (self.error_type_fatal):
             raise ValueError('DAG did not finished as expected')
 
         return self
 
-    def safe_execute(
-        self, leaves_ids: Optional[List[Union[Hashable, ExecNode]]] = None
-    ) -> Dict[Hashable, Any]:
-        """
-        Execute the ExecNodes in topological order without priority in for loop manner for debugging purposes
-        """
-        # 1. create the subgraph to be executed
-        graph = subgraph(self.graph_ids, leaves_ids)
 
-        # 2. deep copy the node_dict to store the results in each node
-        node_dict = deepcopy(self.node_dict)
-        for node_id in graph.topological_sort():
-            node_dict[node_id].execute(node_dict)
-
-        return node_dict
 
     def handle_exception(self, graph: DiGraphEx, fut: "Future[Any]", id_: Hashable) -> None:
         """
-        checks if futures have produced exceptions, and handles them
-        according to the specified behavior
-        Args:
-            graph: the graph
-            fut: the future
-            id_: the identification of the ExecNode
-
-        Returns:
+        This simply raise an error if any
 
         """
 
-        if self.behavior == ErrorStrategy.strict:
-            # will raise the first encountered exception if there's one
-            # no simpler way to check for exception, and not supported by flake8
-            _res = fut.result()  # noqa: F841
 
-        else:
-            try:
-                _res = fut.result()  # noqa: F841
+        _res = fut.result()  # noqa: F841
 
-            except Exception:
-                logger.exception(f"The feature {id_} encountered the following error:")
 
-                if self.behavior == ErrorStrategy.permissive:
-                    logger.warning("Ignoring exception as the behavior is set to permissive")
-
-                elif self.behavior == ErrorStrategy.all_children:
-                    # remove all its children. Current node will be removed directly afterwards
-                    successors = list(graph.successors(id_))
-                    for children_ids in successors:
-                        graph.remove_recursively(children_ids)
-
-                else:
-                    raise NotImplementedError(f"Unknown behavior name: {self.behavior}")

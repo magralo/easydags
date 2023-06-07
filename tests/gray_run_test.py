@@ -6,7 +6,8 @@ from easydags import  ExecNode, DAG
 import time
 import networkx as nx
 
-def test_running_ok():
+#falta otro test con un nodo rojo y otro gris
+def test_running_gray():
 
     nodes = []
 
@@ -18,19 +19,16 @@ def test_running_ok():
 
 
     nodes.append( ExecNode(id_= 'pre_process',
-            exec_function = prepro,
-            output_name = 'my_cool_df'
+            exec_function = prepro
             ) )  
 
 
-    def model1(**kwargs):
-        df = kwargs['my_cool_df']
-        time.sleep(3)
+    def model1():
         return 'model 1 37803'
 
     nodes.append( ExecNode(id_= 'model1',
             exec_function = model1 ,
-            depends_on_hard= ['pre_process'],
+            depends_on_soft = ['pre_process'],
             output_name = 'model1'
             ) )   
 
@@ -39,11 +37,12 @@ def test_running_ok():
     def model2(**kwargs):
         df = kwargs['my_cool_df']
         time.sleep(3)
+        raise ValueError('This is a random error')
         return 'model 2 78373'
 
     nodes.append( ExecNode(id_= 'model2',
             exec_function = model2 ,
-            depends_on_hard= ['pre_process'],
+            depends_on_soft = ['pre_process'],
             output_name = 'model2'
             ) )  
 
@@ -63,7 +62,10 @@ def test_running_ok():
 
 
 
-    dag = DAG(nodes,name = 'Ensemble test example',max_concurrency=3, debug = False)
+    dag = DAG(nodes,name = 'gray example',
+              max_concurrency=3, 
+              debug = False,
+              error_type_fatal= False)
 
     dag.execute()
     
@@ -73,22 +75,9 @@ def test_running_ok():
 
 
 
-        
-    states =[nodes_states[f].result['state'] for f in ids]
-    
+         
 
-    assert min(states) == 1
-
-
-    init_1 = nodes_states['model1'].result['initial_time']
-    init_2 = nodes_states['model2'].result['initial_time']
-
-    final_1 = nodes_states['model1'].result['final_time']
-    final_2 = nodes_states['model2'].result['final_time']
-
-
-    assert init_2 < final_1 #Assert parallel execution
-    assert init_1 < final_2 #Assert parallel execution
+    assert nodes_states['ensemble'].result['state']==0
 
 
     ### all nodes
@@ -104,3 +93,6 @@ def test_running_ok():
     assert ('model2','ensemble') in dag.graph_ids.edges
     assert ('pre_process','model1') in dag.graph_ids.edges
     assert ('pre_process','model2') in dag.graph_ids.edges
+
+
+

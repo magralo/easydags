@@ -64,7 +64,7 @@ This library will help you get through all those challenges if you use it wisely
 
 This is a tricky question... after all, all your processes might be ok. But I will try to explain the main reason with one example:
 
-![Motivation](resource_readme/concurrence_imp.png)
+![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrence_imp.png)
               
 
 Unless you are using DAGs, there is a high possibility that you are following the lineal DAG.. but thats inefficient; there is a high possibility that you have a lot of processes that can run in parallel thats why DAGs are so useful; they do not only give us one execution order, they also help us realize which task can be parallelized... and of course, this library implements that using threads (we can define the maximum number of threads with the parameter max_concurrency in the DAG constructor)
@@ -249,7 +249,7 @@ dag.execute()
 ```
 Please note that we can check the logs to verify that model 1 and model ran in parallel
 
-![Motivation](resource_readme/concurrence_check.png)
+![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrence_check.png)
 
 
 
@@ -270,10 +270,10 @@ When you create the dag object, you can name the DAG as you want (by default, th
     - Gray: Did not run because one of their dependencies failed
 
 
-![Motivation](resource_readme/html_output.png)
+![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
 
 
-#### One last cool feature: The number of trials
+#### Another last cool feature: The number of trials
 
 There are some cases where simply rerunning your task is enough... that is why we implemented this feature; we can set several trials with the parameters n_trials in the creations of each node.
 
@@ -284,6 +284,23 @@ node = ExecNode(id_= 'id',
               n_trials= 3 # set number of trials
               )
 ```
+
+
+#### Handling the errors in the dag
+
+When you call the execute method on a DAG object it will always run all the possible nodes... that means that if B depends on A and A fails we wont run A!.
+
+When that happens we create the "gray" state in the html output but the execute method will raise an exception by default to alert that there was an error... in case you do not need that alert you can simply modify the DAG creation with one additional parameter called error_type_fatal and setting it as False (this is True by default)
+
+```python
+dag = DAG(nodes,name = 'gray example',
+              max_concurrency=3, 
+              debug = False,
+              error_type_fatal= False)
+
+dag.execute() # if there is an error we wont raise an exception because error_type_fatal= False 
+```
+
 
 
 ## Deploying your DAGs

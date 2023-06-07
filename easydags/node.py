@@ -168,12 +168,13 @@ class ExecNode:
         result['final_time'] = final
         result['duration'] = (datetime.strptime(initial_time,"%Y-%m-%d, %H:%M:%S")-datetime.strptime(final,"%Y-%m-%d, %H:%M:%S")).total_seconds()
         result['duration'] = str(-int(result['duration']))+ ' sec'
+
         self.result = result
 
         # 3. useless return value
         if debug:
             logger.debug(f"Finished executing {self.id} with task {self.exec_function}")
-        return self.result
+        return result
 
 
 
