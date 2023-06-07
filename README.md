@@ -275,6 +275,42 @@ When you create the dag object, you can name the DAG as you want (by default, th
     - Log of error in case of an error
 
 
+If you do not need or do not want the html output you can set the argument draw as false in the DAG inicialization 
+
+```python
+from easydags import  ExecNode, DAG
+import time
+
+nodes = []
+
+
+def example0():
+    print('beginning 0')
+    time.sleep(3)
+    print('end 0')
+
+
+
+nodes.append( ExecNode(id_= 'f0',
+              exec_function = example0
+              ) )  
+
+
+def example1():
+    print('beginning 1')
+    print('end 1')
+
+nodes.append( ExecNode(id_= 'f1',
+              exec_function = example1 ,
+              depends_on_soft= ['f0']
+              ) )   
+
+dag = DAG(nodes,name = 'NO HTML OUTPUT',max_concurrency=8, debug = False, draw = False)
+
+dag.execute()
+```
+
+
 ![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
 
 
