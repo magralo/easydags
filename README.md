@@ -249,7 +249,7 @@ dag.execute()
 ```
 Please note that we can check the logs to verify that model 1 and model ran in parallel
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrence_check.png)
+![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrent_check.png)
 
 
 
