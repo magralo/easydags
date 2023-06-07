@@ -171,7 +171,8 @@ class DAG:
         name: str = 'DAG',
         max_concurrency: int = 1,
         debug: bool = True,
-        error_type_fatal: bool = True
+        error_type_fatal: bool = True,
+        draw: bool = True
     ):
         """
         Args:
@@ -179,6 +180,8 @@ class DAG:
             max_concurrency: the maximal number of threads running in parallel
             name: Name of the dag, will be usefull for creating the html output
             degub: weather or not you want degub messages
+            error_type_fatal: weather or not you want the whole process to fail if at least one node fails
+            draw: Set false if you do not want the html output
 
         """
         self.graph_ids = DiGraphEx()
@@ -186,6 +189,7 @@ class DAG:
         self.name = name
 
         self.debug = debug
+        self.draw = draw
 
         self.error_type_fatal = error_type_fatal
         # since ExecNodes are modified they must be copied
@@ -400,7 +404,7 @@ class DAG:
         ''')
 
 
-        g.show('nx.html')
+        #g.show('nx.html')
         
 
         import re 
@@ -536,8 +540,9 @@ class DAG:
                 if exec_node.is_sequential:
                     wait(futures.values(), return_when=ALL_COMPLETED)
         self.node_dict = node_dict
-
-        self._draw()
+        
+        if self.draw:
+            self._draw()
 
         states = [node_dict[x].result['state'] for x in node_dict]
 
