@@ -268,6 +268,11 @@ When you create the dag object, you can name the DAG as you want (by default, th
     - Green: ok
     - Red: It failed
     - Gray: Did not run because one of their dependencies failed
+4. On each node you can click/hover to check this info:
+    - Started at
+    - End at
+    - Execution time
+    - Log of error in case of an error
 
 
 ![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
