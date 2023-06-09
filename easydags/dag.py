@@ -291,8 +291,108 @@ class DAG:
 
             # assign the new leaf nodes
             leaf_ids = graph_ids.leaf_nodes()
+    
+    def only_draw(self, name = None, color = 'green') -> None:
+        """
+        Draws the Networkx directed graph.
+        Args:
+            k: parameter for the layout of the graph, the higher, the further the nodes apart
+            display: display the layout created
+            t: time to display in seconds
+        """
 
-    def _draw(self,name='Graph', k: float = 0.8, display: bool = True, t: int = 3) -> None:
+        if name is None:
+            name = self.name
+
+
+        for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
+            # `multipartite_layout` expects the layer as a node attribute, so add the
+            # numeric layer value as a node attribute
+            for node in nodes:
+                self.graph_ids.nodes[node]["layer"] = layer
+
+        # Compute the multipartite_layout using the "layer" node attribute
+        pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
+        
+
+        from pyvis.network import Network
+
+        
+
+        head_title = f"{self.name} structure"
+
+        g = Network(layout=True,directed =True,heading=head_title)
+
+
+        titles = []
+        color_map = [] 
+        
+        for f in  list(pos.keys()):
+            title = f'''id: {f}'''
+            titles.append(title)
+            color_map.append(color)
+
+
+
+        aux = [x[0]   for x in pos.values()]
+
+        pos_holder = list(set(aux))
+
+        pos_holder.sort()
+
+        
+
+        level = [pos_holder.index(i) for i in aux]
+
+
+        for i in range(len(pos.keys())):
+            g.add_node(list(pos.keys())[i],
+                         label= list(pos.keys())[i],
+                         level = level[i],
+                         title = titles[i],
+                         color= color_map[i])
+            
+
+        #g = Network('500px', '500px')
+
+
+
+
+        for e in self.graph_ids.edges :
+            
+            g.add_edge(e[0],e[1])
+            
+
+        g.set_options('''
+        var options = {
+            "layout": {
+                "hierarchical": {
+                    "enabled": true,
+                    "direction": "LR",  
+                    "sortMethod": "directed"
+                }
+            },
+            "physics": {
+                "enabled": false
+            }
+        }
+        ''')
+
+
+        
+
+        html_file_name = f'{name}_structure.html'
+        g.show( html_file_name)
+        
+
+        import re 
+        html_str = re.sub(r'<center>.+?<\/h1>\s+<\/center>', '', g.html, 1, re.DOTALL)
+        h = open( html_file_name,'w')
+        h.write(html_str)
+        h.close()
+        
+
+    def _draw(self) -> None:
         """
         Draws the Networkx directed graph.
         Args:
@@ -403,13 +503,13 @@ class DAG:
         }
         ''')
 
-
-        #g.show('nx.html')
+        html_file_name = f'{self.name}_states_run.html'
+        g.show( html_file_name)
         
 
         import re 
         html_str = re.sub(r'<center>.+?<\/h1>\s+<\/center>', '', g.html, 1, re.DOTALL)
-        h = open(f'{self.name}_states_run.html','w')
+        h = open( html_file_name,'w')
         h.write(html_str)
         h.close()
 
