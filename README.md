@@ -310,6 +310,10 @@ dag = DAG(nodes,name = 'NO HTML OUTPUT',max_concurrency=8, debug = False, draw =
 dag.execute()
 ```
 
+
+![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
+
+
 You can also only draw your DAG without executing (maybe if you only want to show the structure of your dag to someone or to paste it on your documentation)
 
 ```python
@@ -394,8 +398,6 @@ dag.only_draw(name = 'yellow dag', color = 'yellow')
 
 ```
 
-
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
 
 
 #### Another last cool feature: The number of trials
