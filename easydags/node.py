@@ -80,6 +80,45 @@ class ExecNode:
     @property
     def computed_dependencies(self) -> bool:
         return isinstance(self.depends_on, list)
+    
+    def _add_soft_dependency(self, other):
+
+        depends_on = other.depends_on.copy()
+
+        depends_on.insert(0,self.id)
+ 
+
+        other.depends_on = depends_on
+
+
+        return self
+    
+    def __gt__(self, other):
+        #soft dependency
+
+        aux = self._add_soft_dependency(other)
+
+        return aux 
+    
+    def _add_hard_dependency(self, other):
+        
+
+        depends_on = other.depends_on.copy()
+        depends_on_hard = other.depends_on_hard.copy()
+
+        depends_on.insert(0,self.id)
+        depends_on_hard.insert(0,self.id)
+
+        other.depends_on = depends_on
+        other.depends_on_hard = depends_on_hard
+
+        return other
+    
+    def __rshift__(self, other):
+        #hard dependency
+        aux = self._add_hard_dependency(other)
+
+        return aux 
 
     # this is breaking change however
     def execute(self, 
@@ -98,6 +137,7 @@ class ExecNode:
         # 1. fabricate the arguments for this ExecNode
         if debug:
             logger.debug(f"Start executing {self.id} with task {self.exec_function}")
+
 
         kwargs = {
             node_dict[dep_hash].argument_name: node_dict[dep_hash].result['result']

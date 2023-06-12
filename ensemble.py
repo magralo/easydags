@@ -8,9 +8,9 @@ nodes = []
 
 
 def prepro():
-    print('beginning pre pro')
+    #print('beginning pre pro')
     time.sleep(3)
-    print('end pre pro')
+    #print('end pre pro')
     return 'df with cool features'
 
 
@@ -24,7 +24,7 @@ nodes.append( ExecNode(id_= 'pre_process',
 def model1(**kwargs):
     df = kwargs['my_cool_df']
     
-    print(f'i am using {df} in model 1')
+    #print(f'i am using {df} in model 1')
     time.sleep(3)
     print('finish training model1')
     
@@ -41,11 +41,11 @@ nodes.append( ExecNode(id_= 'model1',
 def model2(**kwargs):
     df = kwargs['my_cool_df']
     
-    print(f'i am using {df} in model 2')
+    #print(f'i am using {df} in model 2')
     time.sleep(3)
     print('finished training model2')
     
-    return 'model 2 78373'
+    return 'model 2 5678'
 
 nodes.append( ExecNode(id_= 'model2',
               exec_function = model2 ,

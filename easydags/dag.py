@@ -609,7 +609,7 @@ class DAG:
                     -1
                 ]
 
-                logger.info(f"{exec_node.id} will run!")
+                #logger.info(f"{exec_node.id} will run!")
 
                 # 4.2 if the current node must be run sequentially, wait for a running node to finish.
                 # in that case we must prune the graph to re-check whether a new root node

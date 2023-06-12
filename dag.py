@@ -44,7 +44,7 @@ import random as rnd
 
 def fail(**kwargs):
     rnd_num = rnd.random()
-    if rnd_num > 0.5:
+    if rnd_num > 0.01:
          raise ValueError('This is a random error')
     return kwargs
 
