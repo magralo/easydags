@@ -13,7 +13,7 @@ from .node import LazyExecNode, exec_nodes_lock
 def op(
     id_,
     func: Optional[Callable[..., Any]] = None,
-    depends_on = [],
+    depends_on=[],
     *,
     priority: int = 0,
     argument_name: Optional[str] = None,
@@ -38,7 +38,9 @@ def op(
     """
 
     def my_custom_op(_func: Callable[..., Any]) -> "LazyExecNode":
-        lazy_exec_node = LazyExecNode(id_,_func,depends_on, priority, argument_name, is_sequential)
+        lazy_exec_node = LazyExecNode(
+            id_, _func, depends_on, priority, argument_name, is_sequential
+        )
         functools.update_wrapper(lazy_exec_node, _func)
         return lazy_exec_node
 
@@ -79,7 +81,9 @@ def to_dag(
             with exec_nodes_lock:
                 node.exec_nodes = []
                 _func(*args, **kwargs)
-                d = DAG(node.exec_nodes, max_concurrency=max_concurrency, behavior=behavior)
+                d = DAG(
+                    node.exec_nodes, max_concurrency=max_concurrency, behavior=behavior
+                )
                 node.exec_nodes = []
 
             return d
