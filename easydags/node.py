@@ -57,6 +57,7 @@ class ExecNode:
         self.compound_priority: int = priority
         self.n_trials: int = n_trials
         self.is_sequential = is_sequential
+        self.state = 0
 
         # a string that identifies the ExecNode.
         # It is either the name of the identifying function or the identifying string id_
@@ -160,6 +161,7 @@ class ExecNode:
                         result["result"] = self.exec_function(**kwargs)
                         result["state"] = 1
                         result["message"] = "Executed as expected"
+                        self.state = 1
                         break  # no need for re-trials
                     except:
                         result["result"] = None
@@ -168,12 +170,14 @@ class ExecNode:
                         error = traceback.format_exc()
                         msg = f"The error when executing {self.id} on trial {i+1} : {error}"
                         result["message"] = msg
+                        self.state = -1
                         logger.info(msg)
                     i += 1
             else:
                 result["result"] = None
                 result["state"] = 0
                 result["message"] = "Did not run"
+                self.state = 0
 
         else:
             i = 0
@@ -183,6 +187,7 @@ class ExecNode:
                     result["result"] = self.exec_function(**kwargs)
                     result["state"] = 1
                     result["message"] = "Executed as expected"
+                    self.state = 1
                     break  # no need for re-trials
                 except:
                     result["result"] = None
@@ -190,6 +195,7 @@ class ExecNode:
                     error = traceback.format_exc()
                     msg = f"The error when executing {self.id} on trial {i+1} : {error}"
                     result["message"] = msg
+                    self.state = -1
                     logger.info(msg)
                 i += 1
 

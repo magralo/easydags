@@ -46,7 +46,7 @@ def model2(**kwargs):
     
     return 'model 2 5678'
 
-node3 = ExecNode(id_= 'model2',
+node2 = ExecNode(id_= 'model2',
               exec_function = model2 ,
               output_name = 'model2'
               ) 
@@ -75,6 +75,7 @@ node0>>node2
 node1>>node3
 node2>>node3
 
+nodes = [node0, node1, node3, node2]
 
 
 dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)

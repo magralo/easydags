@@ -612,12 +612,21 @@ class DAG:
                     continue
 
                 # 5.1 submit the exec node to the executor
-                exec_future = executor.submit(
-                    exec_node.execute,
-                    node_dict=node_dict,
-                    debug=self.debug,
-                    initial_time=datetime.now().strftime("%Y-%m-%d, %H:%M:%S"),
-                )
+                if exec_node.state !=1:
+                    exec_future = executor.submit(
+                        exec_node.execute,
+                        node_dict=node_dict,
+                        debug=self.debug,
+                        initial_time=datetime.now().strftime("%Y-%m-%d, %H:%M:%S"),
+                    )
+                    
+                else:
+                    
+                    logger.info(f"{exec_node.id} already in finished state, wont run")
+                    exec_future = executor.submit(
+                        lambda : print('')
+                    )
+
                 running.add(exec_future)
                 futures[exec_node.id] = exec_future
 
@@ -631,7 +640,7 @@ class DAG:
             self._draw()
 
         states = [node_dict[x].result["state"] for x in node_dict]
-
+        
         if (min(states) != 1) and (self.error_type_fatal):
             raise ValueError("DAG did not finished as expected")
 
