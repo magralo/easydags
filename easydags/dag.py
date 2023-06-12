@@ -1,5 +1,11 @@
 import time
-from concurrent.futures import ALL_COMPLETED, FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from concurrent.futures import (
+    ALL_COMPLETED,
+    FIRST_COMPLETED,
+    Future,
+    ThreadPoolExecutor,
+    wait,
+)
 from copy import deepcopy
 from typing import Any, Dict, Hashable, List, Optional, Set, Tuple, Union
 
@@ -13,6 +19,7 @@ import traceback
 from .errors import ErrorStrategy
 from .node import ExecNode
 from datetime import datetime
+
 
 # todo remove dependency on DiGraph!
 class DiGraphEx(nx.DiGraph):
@@ -129,7 +136,9 @@ class DiGraphEx(nx.DiGraph):
 
 
 # TODO: move into a separate module (Helper functions)
-def subgraph(graph: DiGraphEx, leaves_ids: Optional[List[Union[Hashable, ExecNode]]]) -> DiGraphEx:
+def subgraph(
+    graph: DiGraphEx, leaves_ids: Optional[List[Union[Hashable, ExecNode]]]
+) -> DiGraphEx:
     """returns a deep copy of the same graph if leaves_ids is None,
     otherwise returns a new graph by applying `graph.subgraph_leaves`
 
@@ -149,7 +158,8 @@ def subgraph(graph: DiGraphEx, leaves_ids: Optional[List[Union[Hashable, ExecNod
     if leaves_ids is not None:
         # Extract the ids from the provided leaves/leaves_ids
         leaves_ids = [
-            node_id.id if isinstance(node_id, ExecNode) else node_id for node_id in leaves_ids
+            node_id.id if isinstance(node_id, ExecNode) else node_id
+            for node_id in leaves_ids
         ]
 
         graph.subgraph_leaves(leaves_ids)
@@ -168,11 +178,11 @@ class DAG:
     def __init__(
         self,
         exec_nodes: List[ExecNode],
-        name: str = 'DAG',
+        name: str = "DAG",
         max_concurrency: int = 1,
         debug: bool = True,
         error_type_fatal: bool = True,
-        draw: bool = True
+        draw: bool = True,
     ):
         """
         Args:
@@ -185,7 +195,7 @@ class DAG:
 
         """
         self.graph_ids = DiGraphEx()
-    
+
         self.name = name
 
         self.debug = debug
@@ -196,7 +206,9 @@ class DAG:
         self.exec_nodes = exec_nodes
 
         self.max_concurrency = int(max_concurrency)
-        assert max_concurrency >= 1, "Invalid maximum number of threads! Must be a positive integer"
+        assert (
+            max_concurrency >= 1
+        ), "Invalid maximum number of threads! Must be a positive integer"
 
         # variables necessary for DAG construction
         self.backwards_hierarchy: Dict[Hashable, List[Hashable]] = {
@@ -258,7 +270,9 @@ class DAG:
         # calculate the sum of priorities of all recursive children
         self.assign_recursive_children_compound_priority()
 
-        self.exec_node_sequence = [self.node_dict[node_name] for node_name in topological_order]
+        self.exec_node_sequence = [
+            self.node_dict[node_name] for node_name in topological_order
+        ]
 
     def assign_recursive_children_compound_priority(self) -> None:
         """
@@ -276,7 +290,6 @@ class DAG:
         # 2.2. at the end of every epoch, we trim the graph from its leaf nodes;
         #       hence the previous parents become the new leaf nodes
         while len(graph_ids) > 0:
-
             # Epoch level
             for leaf_id in leaf_ids:
                 leaf_node = self.node_dict[leaf_id]
@@ -291,8 +304,8 @@ class DAG:
 
             # assign the new leaf nodes
             leaf_ids = graph_ids.leaf_nodes()
-    
-    def only_draw(self, name = None, color = 'green') -> None:
+
+    def only_draw(self, name=None, color="green") -> None:
         """
         Draws the Networkx directed graph.
         Args:
@@ -304,7 +317,6 @@ class DAG:
         if name is None:
             name = self.name
 
-
         for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
             # `multipartite_layout` expects the layer as a node attribute, so add the
             # numeric layer value as a node attribute
@@ -313,57 +325,45 @@ class DAG:
 
         # Compute the multipartite_layout using the "layer" node attribute
         pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
-        
 
         from pyvis.network import Network
 
-        
-
         head_title = f"{self.name} structure"
 
-        g = Network(layout=True,directed =True,heading=head_title)
-
+        g = Network(layout=True, directed=True, heading=head_title)
 
         titles = []
-        color_map = [] 
-        
-        for f in  list(pos.keys()):
-            title = f'''id: {f}'''
+        color_map = []
+
+        for f in list(pos.keys()):
+            title = f"""id: {f}"""
             titles.append(title)
             color_map.append(color)
 
-
-
-        aux = [x[0]   for x in pos.values()]
+        aux = [x[0] for x in pos.values()]
 
         pos_holder = list(set(aux))
 
         pos_holder.sort()
 
-        
-
         level = [pos_holder.index(i) for i in aux]
 
-
         for i in range(len(pos.keys())):
-            g.add_node(list(pos.keys())[i],
-                         label= list(pos.keys())[i],
-                         level = level[i],
-                         title = titles[i],
-                         color= color_map[i])
-            
+            g.add_node(
+                list(pos.keys())[i],
+                label=list(pos.keys())[i],
+                level=level[i],
+                title=titles[i],
+                color=color_map[i],
+            )
 
-        #g = Network('500px', '500px')
+        # g = Network('500px', '500px')
 
+        for e in self.graph_ids.edges:
+            g.add_edge(e[0], e[1])
 
-
-
-        for e in self.graph_ids.edges :
-            
-            g.add_edge(e[0],e[1])
-            
-
-        g.set_options('''
+        g.set_options(
+            """
         var options = {
             "layout": {
                 "hierarchical": {
@@ -376,21 +376,18 @@ class DAG:
                 "enabled": false
             }
         }
-        ''')
+        """
+        )
 
+        html_file_name = f"{name}_structure.html"
+        g.show(html_file_name)
 
-        
+        import re
 
-        html_file_name = f'{name}_structure.html'
-        g.show( html_file_name)
-        
-
-        import re 
-        html_str = re.sub(r'<center>.+?<\/h1>\s+<\/center>', '', g.html, 1, re.DOTALL)
-        h = open( html_file_name,'w')
+        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", g.html, 1, re.DOTALL)
+        h = open(html_file_name, "w")
         h.write(html_str)
         h.close()
-        
 
     def _draw(self) -> None:
         """
@@ -401,7 +398,6 @@ class DAG:
             t: time to display in seconds
         """
 
-
         for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
             # `multipartite_layout` expects the layer as a node attribute, so add the
             # numeric layer value as a node attribute
@@ -410,85 +406,70 @@ class DAG:
 
         # Compute the multipartite_layout using the "layer" node attribute
         pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
-        
 
-
-        print('drawing')
+        print("drawing")
 
         aux = self.node_dict
 
-
         from pyvis.network import Network
 
-        
-
         # datetime object containing current date and time
-        
 
         head_title = f"{self.name} execution states after run at {self.dt_string}"
 
-        g = Network(layout=True,directed =True,heading=head_title)
-
+        g = Network(layout=True, directed=True, heading=head_title)
 
         titles = []
-        color_map = [] 
-        
-        for f in  list(pos.keys()):
-            state = aux[f].result['state']
-            m = aux[f].result['message']
-            initial = aux[f].result['initial_time']
-            final = aux[f].result['final_time']
-            duration = aux[f].result['duration']
-            title = f'''id: {f}
+        color_map = []
+
+        for f in list(pos.keys()):
+            state = aux[f].result["state"]
+            m = aux[f].result["message"]
+            initial = aux[f].result["initial_time"]
+            final = aux[f].result["final_time"]
+            duration = aux[f].result["duration"]
+            title = f"""id: {f}
                         started at: {initial} and finished at {final}
                         exec_time: {duration}
                         state: {state}
-                        message: {m}'''
+                        message: {m}"""
             titles.append(title)
-            
-            if state == 0  :
-                color_map.append('grey')
-            if state == 1  :
-                color_map.append('green')
-            if state == -1  :
-                color_map.append('red')
 
+            if state == 0:
+                color_map.append("grey")
+            if state == 1:
+                color_map.append("green")
+            if state == -1:
+                color_map.append("red")
 
-        aux = [x[0]   for x in pos.values()]
+        aux = [x[0] for x in pos.values()]
 
         pos_holder = list(set(aux))
 
         pos_holder.sort()
 
-        
-
         level = [pos_holder.index(i) for i in aux]
 
-
         for i in range(len(pos.keys())):
-            g.add_node(list(pos.keys())[i],
-                         label= list(pos.keys())[i],
-                         level = level[i],
-                         title = titles[i],
-                         color= color_map[i])
-            
+            g.add_node(
+                list(pos.keys())[i],
+                label=list(pos.keys())[i],
+                level=level[i],
+                title=titles[i],
+                color=color_map[i],
+            )
 
-        #g = Network('500px', '500px')
+        # g = Network('500px', '500px')
 
         for key in pos.keys():
             x = pos[key][0]
-            y = pos[key][1] 
-            
+            y = pos[key][1]
 
+        for e in self.graph_ids.edges:
+            g.add_edge(e[0], e[1])
 
-
-
-        for e in self.graph_ids.edges :
-            
-            g.add_edge(e[0],e[1])
-            
-
-        g.set_options('''
+        g.set_options(
+            """
         var options = {
             "layout": {
                 "hierarchical": {
@@ -501,19 +482,18 @@ class DAG:
                 "enabled": false
             }
         }
-        ''')
+        """
+        )
 
-        html_file_name = f'{self.name}_states_run.html'
-        g.show( html_file_name)
-        
+        html_file_name = f"{self.name}_states_run.html"
+        g.show(html_file_name)
 
-        import re 
-        html_str = re.sub(r'<center>.+?<\/h1>\s+<\/center>', '', g.html, 1, re.DOTALL)
-        h = open( html_file_name,'w')
+        import re
+
+        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", g.html, 1, re.DOTALL)
+        h = open(html_file_name, "w")
         h.write(html_str)
         h.close()
-
-        
 
     def execute(
         self, leaves_ids: Optional[List[Union[Hashable, ExecNode]]] = None
@@ -527,8 +507,9 @@ class DAG:
         """
 
         from datetime import datetime
+
         now = datetime.now()
-        
+
         self.dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
         # 0.1 create a subgraph of the graph if necessary
         graph = subgraph(self.graph_ids, leaves_ids)
@@ -567,7 +548,10 @@ class DAG:
                 #       => a new root node will be available
                 num_running_threads = get_num_running_threads(futures)
                 num_runnable_nodes_ids = len(runnable_nodes_ids)
-                if num_running_threads == self.max_concurrency or num_runnable_nodes_ids == 0:
+                if (
+                    num_running_threads == self.max_concurrency
+                    or num_runnable_nodes_ids == 0
+                ):
                     # must wait and not submit any workers before a worker ends
                     # (that might create a new more prioritized node) to be executed
                     if self.debug:
@@ -605,11 +589,11 @@ class DAG:
 
                 # 4.1.2 get the node with the highest compound priority
                 # (randomly selected if multiple are suggested)
-                exec_node = sorted(highest_priority_nodes, key=lambda node: node.compound_priority)[
-                    -1
-                ]
+                exec_node = sorted(
+                    highest_priority_nodes, key=lambda node: node.compound_priority
+                )[-1]
 
-                logger.info(f"{exec_node.id} will run!")
+                # logger.info(f"{exec_node.id} will run!")
 
                 # 4.2 if the current node must be run sequentially, wait for a running node to finish.
                 # in that case we must prune the graph to re-check whether a new root node
@@ -628,10 +612,12 @@ class DAG:
                     continue
 
                 # 5.1 submit the exec node to the executor
-                exec_future = executor.submit(exec_node.execute, 
-                                              node_dict=node_dict, 
-                                              debug = self.debug,
-                                              initial_time = datetime.now().strftime("%Y-%m-%d, %H:%M:%S"))
+                exec_future = executor.submit(
+                    exec_node.execute,
+                    node_dict=node_dict,
+                    debug=self.debug,
+                    initial_time=datetime.now().strftime("%Y-%m-%d, %H:%M:%S"),
+                )
                 running.add(exec_future)
                 futures[exec_node.id] = exec_future
 
@@ -640,26 +626,23 @@ class DAG:
                 if exec_node.is_sequential:
                     wait(futures.values(), return_when=ALL_COMPLETED)
         self.node_dict = node_dict
-        
+
         if self.draw:
             self._draw()
 
-        states = [node_dict[x].result['state'] for x in node_dict]
+        states = [node_dict[x].result["state"] for x in node_dict]
 
-        if (min(states)!=1) and (self.error_type_fatal):
-            raise ValueError('DAG did not finished as expected')
+        if (min(states) != 1) and (self.error_type_fatal):
+            raise ValueError("DAG did not finished as expected")
 
         return self
 
-
-
-    def handle_exception(self, graph: DiGraphEx, fut: "Future[Any]", id_: Hashable) -> None:
+    def handle_exception(
+        self, graph: DiGraphEx, fut: "Future[Any]", id_: Hashable
+    ) -> None:
         """
         This simply raise an error if any
 
         """
 
-
         _res = fut.result()  # noqa: F841
-
-

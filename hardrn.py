@@ -11,7 +11,7 @@ def example0():
     print('beginning 0')
     time.sleep(3)
     print('end 0')
-    return 8
+    return 4
 
 
 

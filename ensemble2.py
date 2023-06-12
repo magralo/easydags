@@ -15,10 +15,10 @@ def prepro():
 
 
 
-nodes.append( ExecNode(id_= 'pre_process',
+node0 = ExecNode(id_= 'pre_process',
               exec_function = prepro,
               output_name = 'my_cool_df'
-              ) )  
+              ) 
 
 
 def model1(**kwargs):
@@ -30,11 +30,10 @@ def model1(**kwargs):
     
     return 'model 1 37803'
 
-nodes.append( ExecNode(id_= 'model1',
+node1 = ExecNode(id_= 'model1',
               exec_function = model1 ,
-              depends_on_hard= ['pre_process'],
               output_name = 'model1'
-              ) )   
+              )   
 
 
 
@@ -47,11 +46,10 @@ def model2(**kwargs):
     
     return 'model 2 5678'
 
-nodes.append( ExecNode(id_= 'model2',
+node3 = ExecNode(id_= 'model2',
               exec_function = model2 ,
-              depends_on_hard= ['pre_process'],
               output_name = 'model2'
-              ) )  
+              ) 
 
 
 
@@ -65,15 +63,21 @@ def ensemble(**kwargs):
     
     return result 
 
-nodes.append( ExecNode(id_= 'ensemble',
+node3= ExecNode(id_= 'ensemble',
               exec_function = ensemble ,
               depends_on_hard= ['model1','model2'],
               output_name = 'ensemble'
-              ) )  
+              ) 
+
+node0>>node1
+node0>>node2
+
+node1>>node3
+node2>>node3
 
 
 
-dag = DAG(nodes,name = 'Ensemble example',max_concurrency=3, debug = False)
+dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)
 
 dag.execute()
     
