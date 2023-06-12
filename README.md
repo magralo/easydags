@@ -64,7 +64,7 @@ This library will help you get through all those challenges if you use it wisely
 
 This is a tricky question... after all, all your processes might be ok. But I will try to explain the main reason with one example:
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrence_imp.png)
+![Motivation](https://raw.githubusercontent.com/magralo/easydags/main/resource_readme/concurrence_imp.png)
               
 
 Unless you are using DAGs, there is a high possibility that you are following the lineal DAG.. but thats inefficient; there is a high possibility that you have a lot of processes that can run in parallel thats why DAGs are so useful; they do not only give us one execution order, they also help us realize which task can be parallelized... and of course, this library implements that using threads (we can define the maximum number of threads with the parameter max_concurrency in the DAG constructor)
@@ -345,7 +345,7 @@ dag.execute()
 ```
 Please note that we can check the logs to verify that model 1 and model ran in parallel
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrent_check.png)
+![Motivation](https://raw.githubusercontent.com/magralo/easydags/main/resource_readme/concurrent_check.png)
 
 
 
@@ -407,7 +407,7 @@ dag.execute()
 ```
 
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
+![Motivation](https://raw.githubusercontent.com/magralo/easydags/main/resource_readme/html_output.png)
 
 
 You can also only draw your DAG without executing (maybe if you only want to show the structure of your dag to someone or to paste it on your documentation)
