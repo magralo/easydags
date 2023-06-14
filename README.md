@@ -14,6 +14,14 @@ pip install easydags
 
 Now you can run your DAG's on your local envioronment
 
+## Easy learning with some easy tutorials
+
+- Tutorial_ETL_with_doft_dependencies.ipnyb (Data Engineering + soft dependencies)
+- Tutorial_imbalance_gs.ipnyb (Machine learning + hard dependencies)
+- Tutorial_ML toy.ipnyb (Machine learning + hard dependencies)
+
+# Easy understanding of easydags and its features
+
 ## Define a DAG
 
 Maybe all of you already know what a Directed Acyclic Graph (DAG) is..., but please think about this definition when using this library:
