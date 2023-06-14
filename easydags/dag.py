@@ -177,12 +177,12 @@ class DAG:
 
     def __init__(
         self,
-        exec_nodes: List[ExecNode],
+        exec_nodes: List[ExecNode] = None,
         name: str = "DAG",
         max_concurrency: int = 1,
         debug: bool = True,
         error_type_fatal: bool = True,
-        draw: bool = True,
+        draw: bool = True
     ):
         """
         Args:
@@ -195,7 +195,6 @@ class DAG:
 
         """
         self.graph_ids = DiGraphEx()
-
         self.name = name
 
         self.debug = debug
@@ -209,6 +208,16 @@ class DAG:
         assert (
             max_concurrency >= 1
         ), "Invalid maximum number of threads! Must be a positive integer"
+        
+        node_ids = [n.id for n in exec_nodes]
+
+
+        assert (
+            len(node_ids)>= len(list(set(node_ids)))
+        ), "All node ids should be unique"
+
+
+
 
         # variables necessary for DAG construction
         self.backwards_hierarchy: Dict[Hashable, List[Hashable]] = {

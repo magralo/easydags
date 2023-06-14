@@ -15,6 +15,14 @@ exec_nodes: List["ExecNode"] = []
 exec_nodes_lock = Lock()
 from datetime import datetime
 
+def search_nodes():
+    nodes = [] 
+    globs = globals().copy()
+    for obj_name in globs:         
+        if isinstance(globs[obj_name], ExecNode):
+            nodes.append(globs[obj_name])
+    return (nodes)
+
 
 class ExecNode:
     """
@@ -82,6 +90,10 @@ class ExecNode:
     def computed_dependencies(self) -> bool:
         return isinstance(self.depends_on, list)
 
+    def is_node(self):
+        return 'yes_i_am_a_node'
+    
+    
     def _add_soft_dependency(self, other):
         depends_on = other.depends_on.copy()
 
