@@ -44,7 +44,7 @@ import random as rnd
 
 def fail(**kwargs):
     rnd_num = rnd.random()
-    if rnd_num > 0.01:
+    if rnd_num > 0.9:
          raise ValueError('This is a random error')
     return kwargs
 
@@ -58,7 +58,7 @@ nodes.append( ExecNode(id_= 'f4',
 
 nodes.append( ExecNode(id_= 'f5',
               exec_function = fail,
-              n_trials=3,
+              n_trials=1,
               depends_on_hard= ['f3']) )  
 
 
@@ -72,9 +72,12 @@ nodes.append( ExecNode(id_= 'f6',
 
 
 def execute():
-    dag = DAG(nodes,name = 'Example DAG',max_concurrency=8, debug = False)
+    dag = DAG(nodes,name = 'Example DAG',max_concurrency=8, debug = False,error_type_fatal=False)
 
     dag.execute()
+    print('###########################')
+    dag.execute()
+
     
 
 

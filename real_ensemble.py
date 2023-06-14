@@ -1,7 +1,7 @@
 
 # type: ignore
 
-from easydags import  ExecNode, DAG, search_nodes
+from easydags import  ExecNode, DAG
 import time
 
 nodes = []
@@ -15,10 +15,10 @@ def prepro():
 
 
 
-node0 = ExecNode(id_= 'pre_process',
+nodes.append( ExecNode(id_= 'pre_process',
               exec_function = prepro,
               output_name = 'my_cool_df'
-              ) 
+              ) )  
 
 
 def model1(**kwargs):
@@ -30,10 +30,11 @@ def model1(**kwargs):
     
     return 'model 1 37803'
 
-node1 = ExecNode(id_= 'model1',
+nodes.append( ExecNode(id_= 'model1',
               exec_function = model1 ,
+              depends_on_hard= ['pre_process'],
               output_name = 'model1'
-              )   
+              ) )   
 
 
 
@@ -46,10 +47,11 @@ def model2(**kwargs):
     
     return 'model 2 5678'
 
-node2 = ExecNode(id_= 'model2',
+nodes.append( ExecNode(id_= 'model2',
               exec_function = model2 ,
+              depends_on_hard= ['pre_process'],
               output_name = 'model2'
-              ) 
+              ) )  
 
 
 
@@ -63,30 +65,15 @@ def ensemble(**kwargs):
     
     return result 
 
-node3= ExecNode(id_= 'ensemble',
+nodes.append( ExecNode(id_= 'ensemble',
               exec_function = ensemble ,
+              depends_on_hard= ['model1','model2'],
               output_name = 'ensemble'
-              ) 
+              ) )  
 
 
 
-node0>>node1
-node0>>node2
-
-node1>>node3
-node2>>node3
-
-
-nodes = [] 
-globs = globals().copy()
-for obj_name in globs:         
-    if isinstance(globs[obj_name], ExecNode):
-        nodes.append(globs[obj_name])
-
-
-
-
-dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)
+dag = DAG(nodes,name = 'Ensemble example',max_concurrency=3, debug = False)
 
 dag.execute()
     

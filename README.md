@@ -14,6 +14,14 @@ pip install easydags
 
 Now you can run your DAG's on your local envioronment
 
+## Easy learning with some easy tutorials
+
+- Tutorial_ETL_with_doft_dependencies.ipnyb (Data Engineering + soft dependencies)
+- Tutorial_imbalance_gs.ipnyb (Machine learning + hard dependencies)
+- Tutorial_ML toy.ipnyb (Machine learning + hard dependencies)
+
+# Easy understanding of easydags and its features
+
 ## Define a DAG
 
 Maybe all of you already know what a Directed Acyclic Graph (DAG) is..., but please think about this definition when using this library:
@@ -64,7 +72,7 @@ This library will help you get through all those challenges if you use it wisely
 
 This is a tricky question... after all, all your processes might be ok. But I will try to explain the main reason with one example:
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrence_imp.png)
+![Motivation](https://raw.githubusercontent.com/magralo/easydags/main/resource_readme/concurrence_imp.png)
               
 
 Unless you are using DAGs, there is a high possibility that you are following the lineal DAG.. but thats inefficient; there is a high possibility that you have a lot of processes that can run in parallel thats why DAGs are so useful; they do not only give us one execution order, they also help us realize which task can be parallelized... and of course, this library implements that using threads (we can define the maximum number of threads with the parameter max_concurrency in the DAG constructor)
@@ -175,7 +183,7 @@ Following the idea from airflow we can do the following
 - A>B B depends on A (soft)
 - A>>B B depends on A (hard)
 
-For example we can define the ensemble as
+For example we can define the soft dependecy as 
 
 
 ```python
@@ -185,80 +193,74 @@ import time
 nodes = []
 
 
-def prepro():
-    #print('beginning pre pro')
+def example0():
+    print('beginning 0')
     time.sleep(3)
-    #print('end pre pro')
-    return 'df with cool features'
+    print('end 0')
+
+
+node1= ExecNode(id_= 'f0',
+              exec_function = example0
+              )
 
 
 
-node0 = ExecNode(id_= 'pre_process',
-              exec_function = prepro,
-              output_name = 'my_cool_df'
+def example1():
+    print('beginning 1')
+    print('end 1')
+
+node2= ExecNode(id_= 'f1',
+              exec_function = example1 ,
               ) 
 
 
-def model1(**kwargs):
-    df = kwargs['my_cool_df']
-    
-    #print(f'i am using {df} in model 1')
-    time.sleep(3)
-    print('finish training model1')
-    
-    return 'model 1 37803'
 
-node1 = ExecNode(id_= 'model1',
-              exec_function = model1 ,
-              output_name = 'model1'
+
+
+node1 > node2
+
+nodes = [node2,node1]
+```
+
+
+and the hard dependency as
+
+
+```python
+from easydags import  ExecNode, DAG
+import time
+
+nodes = []
+
+
+def example0():
+    print('beginning 0')
+    time.sleep(3)
+    print('end 0')
+    return 4
+
+
+
+node0 = ExecNode(id_= 'f0',
+              exec_function = example0
               )   
 
 
+def example1(**kwargs):
+    f0_result = kwargs['f0_result']
+    print('beginning 1')
+    print('end 1')
+    print(f0_result + 8 )
 
-def model2(**kwargs):
-    df = kwargs['my_cool_df']
-    
-    #print(f'i am using {df} in model 2')
-    time.sleep(3)
-    print('finished training model2')
-    
-    return 'model 2 5678'
+node1 = ExecNode(id_= 'last',
+              exec_function = example1 
+              )    
 
-node3 = ExecNode(id_= 'model2',
-              exec_function = model2 ,
-              output_name = 'model2'
-              ) 
+node0 >> node1
 
-
-
-def ensemble(**kwargs):
-    model1 = kwargs['model1']
-    model2 = kwargs['model2']
-    
-    result = f'{model1} and {model2}'
-    
-    print(result)
-    
-    return result 
-
-node3= ExecNode(id_= 'ensemble',
-              exec_function = ensemble ,
-              depends_on_hard= ['model1','model2'],
-              output_name = 'ensemble'
-              ) 
-
-node0>>node1
-node0>>node2
-
-node1>>node3
-node2>>node3
-
-
-
-dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)
-
-dag.execute()
+nodes = [node0,node1]
 ```
+
 
 
 #### Defining the simple ensemble
@@ -342,8 +344,95 @@ dag.execute()
 ```
 Please note that we can check the logs to verify that model 1 and model ran in parallel
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/concurrent_check.png)
+![Motivation](https://raw.githubusercontent.com/magralo/easydags/main/resource_readme/concurrent_check.png)
 
+
+
+#### Defining the simple ensemble (using >>)
+
+``` python
+from easydags import  ExecNode, DAG
+import time
+
+nodes = []
+
+
+def prepro():
+    #print('beginning pre pro')
+    time.sleep(3)
+    #print('end pre pro')
+    return 'df with cool features'
+
+
+
+node0 = ExecNode(id_= 'pre_process',
+              exec_function = prepro,
+              output_name = 'my_cool_df'
+              ) 
+
+
+def model1(**kwargs):
+    df = kwargs['my_cool_df']
+    
+    #print(f'i am using {df} in model 1')
+    time.sleep(3)
+    print('finish training model1')
+    
+    return 'model 1 37803'
+
+node1 = ExecNode(id_= 'model1',
+              exec_function = model1 ,
+              output_name = 'model1'
+              )   
+
+
+
+def model2(**kwargs):
+    df = kwargs['my_cool_df']
+    
+    #print(f'i am using {df} in model 2')
+    time.sleep(3)
+    print('finished training model2')
+    
+    return 'model 2 5678'
+
+node2 = ExecNode(id_= 'model2',
+              exec_function = model2 ,
+              output_name = 'model2'
+              ) 
+
+
+
+def ensemble(**kwargs):
+    model1 = kwargs['model1']
+    model2 = kwargs['model2']
+    
+    result = f'{model1} and {model2}'
+    
+    print(result)
+    
+    return result 
+
+node3= ExecNode(id_= 'ensemble',
+              exec_function = ensemble ,
+              depends_on_hard= ['model1','model2'],
+              output_name = 'ensemble'
+              ) 
+
+node0>>node1
+node0>>node2
+
+node1>>node3
+node2>>node3
+
+nodes = [node0, node1, node3, node2]
+
+
+dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)
+
+dag.execute()
+    
+```
 
 
 #### Checking the HTML output
@@ -404,7 +493,7 @@ dag.execute()
 ```
 
 
-![Motivation](https://github.com/magralo/easydags/blob/main/resource_readme/html_output.png)
+![Motivation](https://raw.githubusercontent.com/magralo/easydags/main/resource_readme/html_output.png)
 
 
 You can also only draw your DAG without executing (maybe if you only want to show the structure of your dag to someone or to paste it on your documentation)
@@ -520,6 +609,96 @@ dag = DAG(nodes,name = 'gray example',
 
 dag.execute() # if there is an error we wont raise an exception because error_type_fatal= False 
 ```
+
+#### Running your dag since your last checkpoint
+
+This is a very important feature of this library, the dag object stores the states of the nodes after one execution... if you run/execute your dag for a second time we will only run the nodes that failed or that did not run in the previous execution. As an example you can execute the following code (Please note that when a node wont run you will see the follwing message: "{self.id} already in finished state, wont run")
+
+```python
+from easydags import  ExecNode, DAG
+import time
+
+nodes = []
+
+
+def prepro():
+    #print('beginning pre pro')
+    time.sleep(3)
+    #print('end pre pro')
+    return 'df with cool features'
+
+
+
+node0 = ExecNode(id_= 'pre_process',
+              exec_function = prepro,
+              output_name = 'my_cool_df'
+              ) 
+
+
+def model1(**kwargs):
+    df = kwargs['my_cool_df']
+    
+    #print(f'i am using {df} in model 1')
+    time.sleep(3)
+    print('finish training model1')
+    
+    return 'model 1 37803'
+
+node1 = ExecNode(id_= 'model1',
+              exec_function = model1 ,
+              output_name = 'model1'
+              )   
+
+
+
+def model2(**kwargs):
+    df = kwargs['my_cool_df']
+    
+    #print(f'i am using {df} in model 2')
+    time.sleep(3)
+    print('finished training model2')
+    
+    return 'model 2 5678'
+
+node2 = ExecNode(id_= 'model2',
+              exec_function = model2 ,
+              output_name = 'model2'
+              ) 
+
+
+
+def ensemble(**kwargs):
+    model1 = kwargs['model1']
+    model2 = kwargs['model2']
+    
+    result = f'{model1} and {model2}'
+    
+    print(result)
+    
+    return result 
+
+node3= ExecNode(id_= 'ensemble',
+              exec_function = ensemble ,
+              depends_on_hard= ['model1','model2'],
+              output_name = 'ensemble'
+              ) 
+
+node0>>node1
+node0>>node2
+
+node1>>node3
+node2>>node3
+
+nodes = [node0, node1, node3, node2]
+
+
+dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)
+
+dag.execute()
+    
+
+```
+
 
 
 

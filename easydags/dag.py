@@ -177,12 +177,12 @@ class DAG:
 
     def __init__(
         self,
-        exec_nodes: List[ExecNode],
+        exec_nodes: List[ExecNode] = None,
         name: str = "DAG",
         max_concurrency: int = 1,
         debug: bool = True,
         error_type_fatal: bool = True,
-        draw: bool = True,
+        draw: bool = True
     ):
         """
         Args:
@@ -195,7 +195,6 @@ class DAG:
 
         """
         self.graph_ids = DiGraphEx()
-
         self.name = name
 
         self.debug = debug
@@ -209,6 +208,18 @@ class DAG:
         assert (
             max_concurrency >= 1
         ), "Invalid maximum number of threads! Must be a positive integer"
+        
+        node_ids = [n.id for n in exec_nodes]
+
+        n_unique_ids = len(list(set(node_ids)))
+
+        n_nodes = len(exec_nodes)
+
+        assert (
+            n_nodes==n_unique_ids
+        ), "All node ids should be unique"
+
+
 
         # variables necessary for DAG construction
         self.backwards_hierarchy: Dict[Hashable, List[Hashable]] = {
@@ -612,12 +623,21 @@ class DAG:
                     continue
 
                 # 5.1 submit the exec node to the executor
-                exec_future = executor.submit(
-                    exec_node.execute,
-                    node_dict=node_dict,
-                    debug=self.debug,
-                    initial_time=datetime.now().strftime("%Y-%m-%d, %H:%M:%S"),
-                )
+                if exec_node.state !=1:
+                    exec_future = executor.submit(
+                        exec_node.execute,
+                        node_dict=node_dict,
+                        debug=self.debug,
+                        initial_time=datetime.now().strftime("%Y-%m-%d, %H:%M:%S"),
+                    )
+                    
+                else:
+                    
+                    logger.info(f"{exec_node.id} already in finished state, wont run")
+                    exec_future = executor.submit(
+                        lambda : print('')
+                    )
+
                 running.add(exec_future)
                 futures[exec_node.id] = exec_future
 
@@ -631,7 +651,7 @@ class DAG:
             self._draw()
 
         states = [node_dict[x].result["state"] for x in node_dict]
-
+        
         if (min(states) != 1) and (self.error_type_fatal):
             raise ValueError("DAG did not finished as expected")
 
