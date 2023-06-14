@@ -211,11 +211,13 @@ class DAG:
         
         node_ids = [n.id for n in exec_nodes]
 
+        n_unique_ids = len(list(set(node_ids)))
+
+        n_nodes = len(exec_nodes)
 
         assert (
-            len(node_ids)>= len(list(set(node_ids)))
+            n_nodes==n_unique_ids
         ), "All node ids should be unique"
-
 
 
 
