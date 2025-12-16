@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 # read the contents of your README file
 from pathlib import Path
@@ -7,19 +7,31 @@ long_description = (this_directory / "README.md").read_text()
 
 
 setup(
-  name = 'easydags',         # How you named your package folder (MyLib)
-  packages = ['easydags'],   # Chose the same as "name"
-  version = '1.0.0',      # Start with a small number and increase it with every change you make
-  description = 'Dags made easy',   # Give a short description about your library
-  author = 'Mateo Graciano',                   # Type in your name
-  author_email = 'magralo@gmail.com',      # Type in your E-Mail
-  install_requires=[            # I get to this in a second
-          'networkx==2.6.3',
-          'pydantic==1.10',
-          'loguru==0.6.0',
-          'matplotlib==3.6.3',
-          'pyvis==0.3.1'
+  name = 'easydags',
+  packages = find_packages(exclude=['tests', 'tests.*']),
+  version = '1.1.0',
+  description = 'Dags made easy',
+  author = 'Mateo Graciano',
+  author_email = 'magralo@gmail.com',
+  python_requires = '>=3.9',
+  install_requires=[
+          'networkx>=3.0',
+          'pydantic>=2.0',
+          'pydantic-settings>=2.0',
+          'loguru>=0.7.0',
+          'matplotlib>=3.8.0',
+          'pyvis>=0.3.2'
       ],
   long_description=long_description,
   long_description_content_type='text/markdown',
+  classifiers=[
+      'Programming Language :: Python :: 3',
+      'Programming Language :: Python :: 3.9',
+      'Programming Language :: Python :: 3.10',
+      'Programming Language :: Python :: 3.11',
+      'Programming Language :: Python :: 3.12',
+      'Programming Language :: Python :: 3.13',
+      'License :: OSI Approved :: MIT License',
+      'Operating System :: OS Independent',
+  ],
 )

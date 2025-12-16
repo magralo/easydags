@@ -1,6 +1,7 @@
 # contains the same dependencies in pyproject.toml for compatibility with markdown-embedded-code github action.
-networkx==2.6.3
-pydantic==1.10
-loguru==0.6.0
-matplotlib==3.6.3
-pyvis==0.3.1
+networkx>=3.0
+pydantic>=2.0
+pydantic-settings>=2.0
+loguru>=0.7.0
+matplotlib>=3.8.0
+pyvis>=0.3.2
