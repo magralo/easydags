@@ -341,7 +341,7 @@ class DAG:
 
         head_title = f"{self.name} structure"
 
-        g = Network(layout=True, directed=True, heading=head_title)
+        g = Network(layout=True, directed=True, heading=head_title, notebook=False)
 
         titles = []
         color_map = []
@@ -391,14 +391,13 @@ class DAG:
         )
 
         html_file_name = f"{name}_structure.html"
-        g.show(html_file_name)
 
         import re
 
-        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", g.html, 1, re.DOTALL)
-        h = open(html_file_name, "w")
-        h.write(html_str)
-        h.close()
+        html_str = g.generate_html()
+        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", html_str, count=1, flags=re.DOTALL)
+        with open(html_file_name, "w") as h:
+            h.write(html_str)
 
     def _draw(self) -> None:
         """
@@ -428,7 +427,7 @@ class DAG:
 
         head_title = f"{self.name} execution states after run at {self.dt_string}"
 
-        g = Network(layout=True, directed=True, heading=head_title)
+        g = Network(layout=True, directed=True, heading=head_title, notebook=False)
 
         titles = []
         color_map = []
@@ -497,14 +496,13 @@ class DAG:
         )
 
         html_file_name = f"{self.name}_states_run.html"
-        g.show(html_file_name)
 
         import re
 
-        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", g.html, 1, re.DOTALL)
-        h = open(html_file_name, "w")
-        h.write(html_str)
-        h.close()
+        html_str = g.generate_html()
+        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", html_str, count=1, flags=re.DOTALL)
+        with open(html_file_name, "w") as h:
+            h.write(html_str)
 
     def execute(
         self, leaves_ids: Optional[List[Union[Hashable, ExecNode]]] = None

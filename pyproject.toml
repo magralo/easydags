@@ -1,7 +1,41 @@
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=61.0",
     "wheel"
 ]
-log_cli = 1
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "easydags"
+version = "1.1.0"
+description = "Dags made easy"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Mateo Graciano", email = "magralo@gmail.com"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "networkx>=3.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "loguru>=0.7.0",
+    "matplotlib>=3.8.0",
+    "pyvis>=0.3.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/magralo/easydags"
+
+[tool.pytest.ini_options]
+log_cli = true
