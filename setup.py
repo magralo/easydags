@@ -19,7 +19,6 @@ setup(
           'pydantic>=2.0',
           'pydantic-settings>=2.0',
           'loguru>=0.7.0',
-          'matplotlib>=3.8.0',
           'pyvis>=0.3.2'
       ],
   long_description=long_description,

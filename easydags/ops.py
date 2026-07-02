@@ -1,11 +1,10 @@
 import functools
 from typing import Any, Callable, Optional
 
-from easydags import DAG
-from easydags.errors import ErrorStrategy
-
 from . import node
 from .config import Cfg
+from .dag import DAG
+from .errors import ErrorStrategy
 from .node import LazyExecNode, exec_nodes_lock
 
 
@@ -13,7 +12,7 @@ from .node import LazyExecNode, exec_nodes_lock
 def op(
     id_,
     func: Optional[Callable[..., Any]] = None,
-    depends_on=[],
+    depends_on=None,
     *,
     priority: int = 0,
     argument_name: Optional[str] = None,
@@ -81,9 +80,8 @@ def to_dag(
             with exec_nodes_lock:
                 node.exec_nodes = []
                 _func(*args, **kwargs)
-                d = DAG(
-                    node.exec_nodes, max_concurrency=max_concurrency, behavior=behavior
-                )
+                d = DAG(node.exec_nodes, max_concurrency=max_concurrency)
+                d.behavior = behavior
                 node.exec_nodes = []
 
             return d

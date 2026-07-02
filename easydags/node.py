@@ -1,8 +1,9 @@
 import inspect
-from threading import Lock
-from types import FunctionType, MethodType
-from typing import Any, Callable, Dict, Hashable, List, Optional
 import traceback
+from datetime import datetime
+from threading import Lock
+from types import MethodType
+from typing import Any, Callable, Dict, Hashable, List, Optional
 
 from loguru import logger
 
@@ -13,15 +14,14 @@ from .config import Cfg
 # a temporary variable used to pass in exec_nodes to the DAG during building
 exec_nodes: List["ExecNode"] = []
 exec_nodes_lock = Lock()
-from datetime import datetime
+
 
 def search_nodes():
-    nodes = [] 
-    globs = globals().copy()
-    for obj_name in globs:         
-        if isinstance(globs[obj_name], ExecNode):
-            nodes.append(globs[obj_name])
-    return (nodes)
+    """
+    Returns every ExecNode defined in the caller's global namespace.
+    """
+    caller_globals = inspect.currentframe().f_back.f_globals
+    return [obj for obj in caller_globals.values() if isinstance(obj, ExecNode)]
 
 
 class ExecNode:
@@ -33,8 +33,8 @@ class ExecNode:
         self,
         id_: Hashable,
         exec_function: Callable[..., Any] = lambda **kwargs: None,
-        depends_on_hard: Optional[List[Hashable]] = [],
-        depends_on_soft: Optional[List[Hashable]] = [],
+        depends_on_hard: Optional[List[Hashable]] = None,
+        depends_on_soft: Optional[List[Hashable]] = None,
         output_name: Optional[str] = None,
         priority: int = 0,
         n_trials: int = 1,
@@ -57,9 +57,9 @@ class ExecNode:
         self.id = id_
         self.exec_function = exec_function
 
-        depends_on = depends_on_hard.copy()
-        depends_on.extend(depends_on_soft)
-        self.depends_on = depends_on
+        depends_on_hard = list(depends_on_hard) if depends_on_hard is not None else []
+        depends_on_soft = list(depends_on_soft) if depends_on_soft is not None else []
+        self.depends_on = depends_on_hard + depends_on_soft
         self.depends_on_hard = depends_on_hard
         self.priority: int = priority
         self.compound_priority: int = priority
@@ -133,7 +133,7 @@ class ExecNode:
         self,
         node_dict: Dict[Hashable, "ExecNode"],
         debug: bool = True,
-        initial_time: str = datetime.now().strftime("%Y-%m-%d, %H:%M:%S"),
+        initial_time: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Execute the ExecNode directly or according to an execution graph.
@@ -143,6 +143,10 @@ class ExecNode:
 
         Returns: the result of the execution of the current ExecNode
         """
+        time_format = "%Y-%m-%d, %H:%M:%S"
+        if initial_time is None:
+            initial_time = datetime.now().strftime(time_format)
+
         logger.info(f"Start executing {self.id} at {initial_time}")
         # 1. fabricate the arguments for this ExecNode
         if debug:
@@ -153,72 +157,42 @@ class ExecNode:
             for dep_hash in self.depends_on_hard
         }
 
-        prev_states = {
-            node_dict[dep_hash].argument_name: node_dict[dep_hash].result["state"]
-            for dep_hash in self.depends_on
-        }
-
-        prev_states = [x[1] for x in list(prev_states.items())]
+        prev_states = [
+            node_dict[dep_hash].result["state"] for dep_hash in self.depends_on
+        ]
 
         result = {}
 
-        error = ""
-
-        if len(prev_states) > 0:
-            if min(prev_states) == 1:  # all prev nodes are ok
-                i = 0
-
-                while i < self.n_trials:
-                    try:
-                        result["result"] = self.exec_function(**kwargs)
-                        result["state"] = 1
-                        result["message"] = "Executed as expected"
-                        self.state = 1
-                        break  # no need for re-trials
-                    except:
-                        result["result"] = None
-                        result["state"] = -1
-
-                        error = traceback.format_exc()
-                        msg = f"The error when executing {self.id} on trial {i+1} : {error}"
-                        result["message"] = msg
-                        self.state = -1
-                        logger.info(msg)
-                    i += 1
-            else:
-                result["result"] = None
-                result["state"] = 0
-                result["message"] = "Did not run"
-                self.state = 0
-
+        if prev_states and min(prev_states) != 1:  # at least one prev node is not ok
+            result["result"] = None
+            result["state"] = 0
+            result["message"] = "Did not run"
+            self.state = 0
         else:
-            i = 0
-
-            while i < self.n_trials:
+            for trial in range(self.n_trials):
                 try:
                     result["result"] = self.exec_function(**kwargs)
                     result["state"] = 1
                     result["message"] = "Executed as expected"
                     self.state = 1
                     break  # no need for re-trials
-                except:
+                except Exception:
                     result["result"] = None
                     result["state"] = -1
                     error = traceback.format_exc()
-                    msg = f"The error when executing {self.id} on trial {i+1} : {error}"
+                    msg = f"The error when executing {self.id} on trial {trial+1} : {error}"
                     result["message"] = msg
                     self.state = -1
                     logger.info(msg)
-                i += 1
 
         result["initial_time"] = initial_time
-        final = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
+        final = datetime.now().strftime(time_format)
         result["final_time"] = final
-        result["duration"] = (
-            datetime.strptime(initial_time, "%Y-%m-%d, %H:%M:%S")
-            - datetime.strptime(final, "%Y-%m-%d, %H:%M:%S")
+        duration = (
+            datetime.strptime(final, time_format)
+            - datetime.strptime(initial_time, time_format)
         ).total_seconds()
-        result["duration"] = str(-int(result["duration"])) + " sec"
+        result["duration"] = f"{int(duration)} sec"
 
         self.result = result
 
@@ -234,8 +208,7 @@ class PreComputedExecNode(ExecNode):
         super().__init__(
             id_=f"{hash(func)}_{argument_name}",
             exec_function=lambda: value,
-            depends_on=[],
-            argument_name=argument_name,
+            output_name=argument_name,
             is_sequential=False,
         )
 
@@ -266,7 +239,7 @@ class LazyExecNode(ExecNode):
         self,
         id_,
         func: Callable[..., Any],
-        depends_on=[],
+        depends_on=None,
         priority: int = 0,
         argument_name: Optional[str] = None,
         is_sequential: bool = Cfg.TAWAZI_IS_SEQUENTIAL,
@@ -275,9 +248,9 @@ class LazyExecNode(ExecNode):
         super().__init__(
             id_=id_,
             exec_function=func,
-            depends_on=depends_on,
+            depends_on_hard=depends_on,
             priority=priority,
-            argument_name=argument_name,
+            output_name=argument_name,
             is_sequential=is_sequential,
         )
 
@@ -332,7 +305,9 @@ class LazyExecNode(ExecNode):
             exec_nodes.append(pre_c_exec_node)
             dependencies.append(pre_c_exec_node.id)
 
+        # lazy dependencies are data dependencies: they all feed kwargs at execution
         self.depends_on = dependencies
+        self.depends_on_hard = dependencies
 
         # in case the same function is called twice
         if self not in exec_nodes:

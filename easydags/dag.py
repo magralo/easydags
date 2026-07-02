@@ -1,4 +1,3 @@
-import time
 from concurrent.futures import (
     ALL_COMPLETED,
     FIRST_COMPLETED,
@@ -6,7 +5,8 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     wait,
 )
-from copy import deepcopy
+from copy import copy
+from datetime import datetime
 from typing import Any, Dict, Hashable, List, Optional, Set, Tuple, Union
 
 import networkx as nx
@@ -14,11 +14,8 @@ from loguru import logger
 from networkx import find_cycle
 from networkx.exception import NetworkXNoCycle, NetworkXUnfeasible
 
-import traceback
-
 from .errors import ErrorStrategy
 from .node import ExecNode
-from datetime import datetime
 
 
 # todo remove dependency on DiGraph!
@@ -95,36 +92,28 @@ class DiGraphEx(nx.DiGraph):
                 a warning will be issued
         """
 
-        # works by pruning the graph until all leaf nodes
-        # are contained inside the provided "nodes"
-        # in the arguments of this method
-
-        if any([node not in self.nodes for node in nodes]):
+        # keeping only the provided nodes and their ancestors is equivalent to
+        # pruning the graph until all leaf nodes are contained inside "nodes"
+        if any(node not in self.nodes for node in nodes):
             raise ValueError(
                 f"The provided nodes are not in the graph. "
                 f"The provided nodes are: {nodes}."
                 f"The graph only contains: {self.nodes}."
             )
 
-        leaf_nodes = self.leaf_nodes()
-        nodes_to_remove = set(leaf_nodes).difference(set(nodes))
+        nodes_to_keep: Set[Hashable] = set(nodes)
+        for node in nodes:
+            nodes_to_keep.update(nx.ancestors(self, node))
 
-        while nodes_to_remove:
-            node_to_remove = nodes_to_remove.pop()
-            self.remove_node(node_to_remove)
+        self.remove_nodes_from([node for node in list(self.nodes) if node not in nodes_to_keep])
 
-            leaf_nodes = self.leaf_nodes()
-            nodes_to_remove = set(leaf_nodes).difference(set(nodes))
-
-        leaf_nodes = self.leaf_nodes()
-        unremovable_nodes = set(nodes).difference(set(leaf_nodes))
+        unremovable_nodes = set(nodes).difference(set(self.leaf_nodes()))
 
         if len(unremovable_nodes) > 0:
-            if self.debug:
-                logger.debug(
-                    f"The provided nodes contain more nodes than necessary, "
-                    f"please remove {unremovable_nodes} nodes"
-                )
+            logger.debug(
+                f"The provided nodes contain more nodes than necessary, "
+                f"please remove {unremovable_nodes} nodes"
+            )
 
         return unremovable_nodes
 
@@ -139,7 +128,7 @@ class DiGraphEx(nx.DiGraph):
 def subgraph(
     graph: DiGraphEx, leaves_ids: Optional[List[Union[Hashable, ExecNode]]]
 ) -> DiGraphEx:
-    """returns a deep copy of the same graph if leaves_ids is None,
+    """returns a copy of the same graph if leaves_ids is None,
     otherwise returns a new graph by applying `graph.subgraph_leaves`
 
     Args:
@@ -149,9 +138,8 @@ def subgraph(
     Returns:
         DiGraphEx: The subgraph of the provided graph
     """
-    # TODO: avoid mutable state, hence avoid doing deep copies ?
-    # 0. deep copy the graph ids
-    graph = deepcopy(graph)
+    # 0. copy the graph structure so pruning it doesn't mutate the original
+    graph = graph.copy()
 
     # TODO: make the creation of subgraph possible directly from initialization
     # 1. create the subgraph
@@ -211,15 +199,7 @@ class DAG:
         
         node_ids = [n.id for n in exec_nodes]
 
-        n_unique_ids = len(list(set(node_ids)))
-
-        n_nodes = len(exec_nodes)
-
-        assert (
-            n_nodes==n_unique_ids
-        ), "All node ids should be unique"
-
-
+        assert len(exec_nodes) == len(set(node_ids)), "All node ids should be unique"
 
         # variables necessary for DAG construction
         self.backwards_hierarchy: Dict[Hashable, List[Hashable]] = {
@@ -290,219 +270,127 @@ class DAG:
         Assigns a compound priority to all nodes in the graph.
         The compound priority is the sum of the priorities of all children recursively.
         """
-        # Note: if there was a forward dependency recorded, this would have been much easier
+        # Iterating in reverse topological order guarantees that a node's compound
+        # priority is final before it is added to its dependencies' priorities.
+        for node_id in reversed(self.graph_ids.topological_sort()):
+            node = self.node_dict[node_id]
+            for parent_id in self.backwards_hierarchy[node_id] or []:
+                self.node_dict[parent_id].compound_priority += node.compound_priority
 
-        graph_ids = deepcopy(self.graph_ids)
-        leaf_ids = graph_ids.leaf_nodes()
+    def _render_html(
+        self,
+        heading: str,
+        html_file_name: str,
+        titles: Dict[Hashable, str],
+        colors: Dict[Hashable, str],
+    ) -> None:
+        """
+        Renders the graph as an interactive pyvis html file.
+        Args:
+            heading: title displayed inside the html page
+            html_file_name: name of the output file
+            titles: hover text per node id
+            colors: color per node id
+        """
+        for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
+            # `multipartite_layout` expects the layer as a node attribute, so add the
+            # numeric layer value as a node attribute
+            for node in nodes:
+                self.graph_ids.nodes[node]["layer"] = layer
 
-        # 2. assign the compound priority for all the remaining nodes in the graph:
-        # Priority assignment happens by epochs:
-        # 2.1. during every epoch, we assign the compound priority for the parents of the current leaf nodes
-        # 2.2. at the end of every epoch, we trim the graph from its leaf nodes;
-        #       hence the previous parents become the new leaf nodes
-        while len(graph_ids) > 0:
-            # Epoch level
-            for leaf_id in leaf_ids:
-                leaf_node = self.node_dict[leaf_id]
+        # Compute the multipartite_layout using the "layer" node attribute
+        pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
 
-                for parent_id in self.backwards_hierarchy[leaf_id]:
-                    # increment the compound_priority of the parent node by the leaf priority
-                    parent_node = self.node_dict[parent_id]
-                    parent_node.compound_priority += leaf_node.compound_priority
+        from pyvis.network import Network
 
-                # trim the graph from its leaf nodes
-                graph_ids.remove_node(leaf_id)
+        g = Network(layout=True, directed=True, heading=heading, notebook=False)
 
-            # assign the new leaf nodes
-            leaf_ids = graph_ids.leaf_nodes()
+        x_levels = {x: i for i, x in enumerate(sorted({p[0] for p in pos.values()}))}
+
+        for node_id, p in pos.items():
+            g.add_node(
+                node_id,
+                label=node_id,
+                level=x_levels[p[0]],
+                title=titles[node_id],
+                color=colors[node_id],
+            )
+
+        for e in self.graph_ids.edges:
+            g.add_edge(e[0], e[1])
+
+        g.set_options(
+            """
+        var options = {
+            "layout": {
+                "hierarchical": {
+                    "enabled": true,
+                    "direction": "LR",
+                    "sortMethod": "directed"
+                }
+            },
+            "physics": {
+                "enabled": false
+            }
+        }
+        """
+        )
+
+        import re
+
+        html_str = g.generate_html()
+        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", html_str, count=1, flags=re.DOTALL)
+        with open(html_file_name, "w") as h:
+            h.write(html_str)
 
     def only_draw(self, name=None, color="green") -> None:
         """
-        Draws the Networkx directed graph.
+        Draws the structure of the DAG as an html file named {name}_structure.html
         Args:
-            k: parameter for the layout of the graph, the higher, the further the nodes apart
-            display: display the layout created
-            t: time to display in seconds
+            name: name of the output file, defaults to the DAG name
+            color: color used for every node
         """
-
         if name is None:
             name = self.name
 
-        for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
-            # `multipartite_layout` expects the layer as a node attribute, so add the
-            # numeric layer value as a node attribute
-            for node in nodes:
-                self.graph_ids.nodes[node]["layer"] = layer
+        titles = {node_id: f"id: {node_id}" for node_id in self.graph_ids.nodes}
+        colors = {node_id: color for node_id in self.graph_ids.nodes}
 
-        # Compute the multipartite_layout using the "layer" node attribute
-        pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
-
-        from pyvis.network import Network
-
-        head_title = f"{self.name} structure"
-
-        g = Network(layout=True, directed=True, heading=head_title, notebook=False)
-
-        titles = []
-        color_map = []
-
-        for f in list(pos.keys()):
-            title = f"""id: {f}"""
-            titles.append(title)
-            color_map.append(color)
-
-        aux = [x[0] for x in pos.values()]
-
-        pos_holder = list(set(aux))
-
-        pos_holder.sort()
-
-        level = [pos_holder.index(i) for i in aux]
-
-        for i in range(len(pos.keys())):
-            g.add_node(
-                list(pos.keys())[i],
-                label=list(pos.keys())[i],
-                level=level[i],
-                title=titles[i],
-                color=color_map[i],
-            )
-
-        # g = Network('500px', '500px')
-
-        for e in self.graph_ids.edges:
-            g.add_edge(e[0], e[1])
-
-        g.set_options(
-            """
-        var options = {
-            "layout": {
-                "hierarchical": {
-                    "enabled": true,
-                    "direction": "LR",  
-                    "sortMethod": "directed"
-                }
-            },
-            "physics": {
-                "enabled": false
-            }
-        }
-        """
+        self._render_html(
+            heading=f"{self.name} structure",
+            html_file_name=f"{name}_structure.html",
+            titles=titles,
+            colors=colors,
         )
-
-        html_file_name = f"{name}_structure.html"
-
-        import re
-
-        html_str = g.generate_html()
-        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", html_str, count=1, flags=re.DOTALL)
-        with open(html_file_name, "w") as h:
-            h.write(html_str)
 
     def _draw(self) -> None:
         """
-        Draws the Networkx directed graph.
-        Args:
-            k: parameter for the layout of the graph, the higher, the further the nodes apart
-            display: display the layout created
-            t: time to display in seconds
+        Draws the DAG with the execution states of the last run
+        as an html file named {self.name}_states_run.html
         """
+        state_colors = {0: "grey", 1: "green", -1: "red"}
 
-        for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
-            # `multipartite_layout` expects the layer as a node attribute, so add the
-            # numeric layer value as a node attribute
-            for node in nodes:
-                self.graph_ids.nodes[node]["layer"] = layer
+        titles = {}
+        colors = {}
+        for node_id, node in self.node_dict.items():
+            result = node.result
+            if result is None:  # node pruned by leaves_ids, never executed
+                titles[node_id] = f"id: {node_id}\n                        state: not executed"
+                colors[node_id] = state_colors[0]
+                continue
+            titles[node_id] = f"""id: {node_id}
+                        started at: {result["initial_time"]} and finished at {result["final_time"]}
+                        exec_time: {result["duration"]}
+                        state: {result["state"]}
+                        message: {result["message"]}"""
+            colors[node_id] = state_colors[result["state"]]
 
-        # Compute the multipartite_layout using the "layer" node attribute
-        pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
-
-        print("drawing")
-
-        aux = self.node_dict
-
-        from pyvis.network import Network
-
-        # datetime object containing current date and time
-
-        head_title = f"{self.name} execution states after run at {self.dt_string}"
-
-        g = Network(layout=True, directed=True, heading=head_title, notebook=False)
-
-        titles = []
-        color_map = []
-
-        for f in list(pos.keys()):
-            state = aux[f].result["state"]
-            m = aux[f].result["message"]
-            initial = aux[f].result["initial_time"]
-            final = aux[f].result["final_time"]
-            duration = aux[f].result["duration"]
-            title = f"""id: {f}
-                        started at: {initial} and finished at {final}
-                        exec_time: {duration}
-                        state: {state}
-                        message: {m}"""
-            titles.append(title)
-
-            if state == 0:
-                color_map.append("grey")
-            if state == 1:
-                color_map.append("green")
-            if state == -1:
-                color_map.append("red")
-
-        aux = [x[0] for x in pos.values()]
-
-        pos_holder = list(set(aux))
-
-        pos_holder.sort()
-
-        level = [pos_holder.index(i) for i in aux]
-
-        for i in range(len(pos.keys())):
-            g.add_node(
-                list(pos.keys())[i],
-                label=list(pos.keys())[i],
-                level=level[i],
-                title=titles[i],
-                color=color_map[i],
-            )
-
-        # g = Network('500px', '500px')
-
-        for key in pos.keys():
-            x = pos[key][0]
-            y = pos[key][1]
-
-        for e in self.graph_ids.edges:
-            g.add_edge(e[0], e[1])
-
-        g.set_options(
-            """
-        var options = {
-            "layout": {
-                "hierarchical": {
-                    "enabled": true,
-                    "direction": "LR",  
-                    "sortMethod": "directed"
-                }
-            },
-            "physics": {
-                "enabled": false
-            }
-        }
-        """
+        self._render_html(
+            heading=f"{self.name} execution states after run at {self.dt_string}",
+            html_file_name=f"{self.name}_states_run.html",
+            titles=titles,
+            colors=colors,
         )
-
-        html_file_name = f"{self.name}_states_run.html"
-
-        import re
-
-        html_str = g.generate_html()
-        html_str = re.sub(r"<center>.+?<\/h1>\s+<\/center>", "", html_str, count=1, flags=re.DOTALL)
-        with open(html_file_name, "w") as h:
-            h.write(html_str)
 
     def execute(
         self, leaves_ids: Optional[List[Union[Hashable, ExecNode]]] = None
@@ -515,16 +403,14 @@ class DAG:
             node_dict: dictionary with keys the name of the function and value the result after the execution
         """
 
-        from datetime import datetime
-
-        now = datetime.now()
-
-        self.dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+        self.dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         # 0.1 create a subgraph of the graph if necessary
         graph = subgraph(self.graph_ids, leaves_ids)
 
-        # 0.2 deepcopy the node_dict in order to modify the results inside every node
-        node_dict = deepcopy(self.node_dict)
+        # 0.2 copy the nodes in order to modify the results inside every node
+        # without mutating the nodes of a previous run (results are reassigned,
+        # never mutated in place, so shallow copies are enough)
+        node_dict = {id_: copy(node) for id_, node in self.node_dict.items()}
 
         # 0.3 create variables related to futures
         futures: Dict[Hashable, "Future[Any]"] = {}
@@ -535,7 +421,7 @@ class DAG:
         def get_num_running_threads(_futures: Dict[Hashable, "Future[Any]"]) -> int:
             # use not future.done() because there is no guarantee that Thread pool will directly execute
             # the submitted thread
-            return sum([not future.done() for future in _futures.values()])
+            return sum(1 for future in _futures.values() if not future.done())
 
         def get_highest_priority_nodes(nodes: List[ExecNode]) -> List[ExecNode]:
             highest_priority = max(node.priority for node in nodes)
@@ -597,10 +483,10 @@ class DAG:
                 highest_priority_nodes = get_highest_priority_nodes(runnable_nodes)
 
                 # 4.1.2 get the node with the highest compound priority
-                # (randomly selected if multiple are suggested)
-                exec_node = sorted(
+                # (arbitrarily selected if multiple are suggested)
+                exec_node = max(
                     highest_priority_nodes, key=lambda node: node.compound_priority
-                )[-1]
+                )
 
                 # logger.info(f"{exec_node.id} will run!")
 
@@ -630,11 +516,8 @@ class DAG:
                     )
                     
                 else:
-                    
                     logger.info(f"{exec_node.id} already in finished state, wont run")
-                    exec_future = executor.submit(
-                        lambda : print('')
-                    )
+                    exec_future = executor.submit(lambda: None)
 
                 running.add(exec_future)
                 futures[exec_node.id] = exec_future
@@ -648,9 +531,12 @@ class DAG:
         if self.draw:
             self._draw()
 
-        states = [node_dict[x].result["state"] for x in node_dict]
-        
-        if (min(states) != 1) and (self.error_type_fatal):
+        # nodes pruned by leaves_ids never ran and have no result
+        states = [
+            node.result["state"] for node in node_dict.values() if node.result is not None
+        ]
+
+        if states and (min(states) != 1) and (self.error_type_fatal):
             raise ValueError("DAG did not finished as expected")
 
         return self
