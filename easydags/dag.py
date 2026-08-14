@@ -14,7 +14,6 @@ from loguru import logger
 from networkx import find_cycle
 from networkx.exception import NetworkXNoCycle, NetworkXUnfeasible
 
-from .errors import ErrorStrategy
 from .node import ExecNode
 
 
@@ -39,26 +38,6 @@ class DiGraphEx(nx.DiGraph):
             the leaf nodes
         """
         return [node for node, degree in self.out_degree if degree == 0]
-
-    def remove_recursively(self, root_node: Hashable) -> None:
-        """
-        Recursively removes all the nodes that depend on the provided one
-        Args:
-            root_node: the root node
-        """
-        nodes_to_remove: Set[Hashable] = set()
-
-        def dfs(n: Hashable, graph: DiGraphEx, visited: Set[Hashable]) -> None:
-            if n in visited:
-                return
-            else:
-                visited.add(n)
-                for child in graph[n].keys():
-                    dfs(child, graph, visited)
-
-        dfs(root_node, self, nodes_to_remove)
-        for node in nodes_to_remove:
-            self.remove_node(node)
 
     def subgraph_leaves(self, nodes: List[Hashable]) -> Set[Hashable]:
         """
@@ -216,8 +195,6 @@ class DAG:
         # a sequence of execution to be applied in a for loop
         self.exec_node_sequence: List[ExecNode] = []
 
-        self.behavior = ErrorStrategy.strict
-
         self._build()
 
     def find_cycle(self) -> Optional[List[Tuple[str, str]]]:
@@ -292,26 +269,23 @@ class DAG:
             titles: hover text per node id
             colors: color per node id
         """
-        for layer, nodes in enumerate(nx.topological_generations(self.graph_ids)):
-            # `multipartite_layout` expects the layer as a node attribute, so add the
-            # numeric layer value as a node attribute
-            for node in nodes:
-                self.graph_ids.nodes[node]["layer"] = layer
-
-        # Compute the multipartite_layout using the "layer" node attribute
-        pos = nx.multipartite_layout(self.graph_ids, subset_key="layer")
+        # pyvis' hierarchical layout only needs a level per node: its topological
+        # layer (this avoids nx.multipartite_layout, which requires numpy)
+        levels = {
+            node: layer
+            for layer, nodes in enumerate(nx.topological_generations(self.graph_ids))
+            for node in nodes
+        }
 
         from pyvis.network import Network
 
         g = Network(layout=True, directed=True, heading=heading, notebook=False)
 
-        x_levels = {x: i for i, x in enumerate(sorted({p[0] for p in pos.values()}))}
-
-        for node_id, p in pos.items():
+        for node_id, level in levels.items():
             g.add_node(
                 node_id,
                 label=node_id,
-                level=x_levels[p[0]],
+                level=level,
                 title=titles[node_id],
                 color=colors[node_id],
             )
@@ -363,16 +337,19 @@ class DAG:
             colors=colors,
         )
 
-    def _draw(self) -> None:
+    def _draw(self, node_dict: Dict[Hashable, ExecNode], dt_string: str) -> None:
         """
-        Draws the DAG with the execution states of the last run
+        Draws the DAG with the execution states of the provided run
         as an html file named {self.name}_states_run.html
+        Args:
+            node_dict: the nodes of the run to draw
+            dt_string: timestamp of the run, displayed in the heading
         """
         state_colors = {0: "grey", 1: "green", -1: "red"}
 
         titles = {}
         colors = {}
-        for node_id, node in self.node_dict.items():
+        for node_id, node in node_dict.items():
             result = node.result
             if result is None:  # node pruned by leaves_ids, never executed
                 titles[node_id] = f"id: {node_id}\n                        state: not executed"
@@ -386,50 +363,76 @@ class DAG:
             colors[node_id] = state_colors[result["state"]]
 
         self._render_html(
-            heading=f"{self.name} execution states after run at {self.dt_string}",
+            heading=f"{self.name} execution states after run at {dt_string}",
             html_file_name=f"{self.name}_states_run.html",
             titles=titles,
             colors=colors,
         )
 
     def execute(
-        self, leaves_ids: Optional[List[Union[Hashable, ExecNode]]] = None
+        self,
+        leaves_ids: Optional[List[Union[Hashable, ExecNode]]] = None,
+        resume: bool = False,
     ) -> Dict[Hashable, Any]:
         """
-        Thread safe execution of the DAG.
+        Execute the DAG.
+        Safe for concurrent execution of the same DAG instance: each run works on
+        its own copy of the nodes and returns its own results. After concurrent
+        runs, `self.node_dict` (and the html output file, which shares one file
+        name per DAG) holds the data of the last run to finish; use the returned
+        dictionary to get the results of a specific run.
         Args:
             leaves_ids: The nodes (or the ids of the nodes) to be executed
+            resume: if True, nodes that finished successfully in a previous run
+                are skipped and keep their previous result (useful to resume a
+                partially failed run). If False (default), every node runs fresh.
         Returns:
-            node_dict: dictionary with keys the name of the function and value the result after the execution
+            node_dict: dictionary mapping node ids to the executed ExecNode copies
+                (each carries its `result` for this run)
         """
 
-        self.dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self.dt_string = dt_string
         # 0.1 create a subgraph of the graph if necessary
         graph = subgraph(self.graph_ids, leaves_ids)
 
         # 0.2 copy the nodes in order to modify the results inside every node
         # without mutating the nodes of a previous run (results are reassigned,
-        # never mutated in place, so shallow copies are enough)
-        node_dict = {id_: copy(node) for id_, node in self.node_dict.items()}
+        # never mutated in place, so shallow copies are enough).
+        # read self.node_dict once so a concurrent run reassigning it can't
+        # give this run a mixed view
+        source_nodes = self.node_dict
+        node_dict = {id_: copy(node) for id_, node in source_nodes.items()}
+
+        # 0.2.1 on a fresh (non-resume) run, discard any state carried over from
+        # a previous run so every node is recomputed
+        if not resume:
+            for node in node_dict.values():
+                node.state = 0
+                node.result = None
 
         # 0.3 create variables related to futures
         futures: Dict[Hashable, "Future[Any]"] = {}
         done: Set["Future[Any]"] = set()
         running: Set["Future[Any]"] = set()
+        # ids submitted to the executor whose node is still in the graph
+        submitted_ids: Set[Hashable] = set()
 
         # 0.4 create helpers functions encapsulated from the outside
-        def get_num_running_threads(_futures: Dict[Hashable, "Future[Any]"]) -> int:
+        def get_num_running_threads(_running: Set["Future[Any]"]) -> int:
             # use not future.done() because there is no guarantee that Thread pool will directly execute
             # the submitted thread
-            return sum(1 for future in _futures.values() if not future.done())
+            return sum(1 for future in _running if not future.done())
 
         def get_highest_priority_nodes(nodes: List[ExecNode]) -> List[ExecNode]:
             highest_priority = max(node.priority for node in nodes)
             return [node for node in nodes if node.priority == highest_priority]
 
-        # 0.5 get the candidates root nodes that can be executed
-        # runnable_nodes_ids will be empty if all root nodes are running
-        runnable_nodes_ids = graph.root_nodes()
+        # 0.5 get the candidate root nodes that can be executed.
+        # `ready` is kept up to date incrementally: a node is added when its last
+        # dependency is removed from the graph and discarded once submitted,
+        # so it never needs a full graph rescan.
+        ready: Set[Hashable] = set(graph.root_nodes())
 
         with ThreadPoolExecutor(max_workers=self.max_concurrency) as executor:
             while len(graph):
@@ -441,11 +444,10 @@ class DAG:
                 #       2. if no runnable node exists (i.e. all root nodes are being executed)
                 #    in both cases: block until a node finishes
                 #       => a new root node will be available
-                num_running_threads = get_num_running_threads(futures)
-                num_runnable_nodes_ids = len(runnable_nodes_ids)
+                num_running_threads = get_num_running_threads(running)
                 if (
                     num_running_threads == self.max_concurrency
-                    or num_runnable_nodes_ids == 0
+                    or len(ready) == 0
                 ):
                     # must wait and not submit any workers before a worker ends
                     # (that might create a new more prioritized node) to be executed
@@ -459,19 +461,53 @@ class DAG:
                 # 1. among the finished futures:
                 #       1. checks for exceptions
                 #       2. and remove them from the graph
-                for id_, fut in futures.items():
-                    if fut.done() and id_ in graph:
+                for id_ in list(submitted_ids):
+                    fut = futures[id_]
+                    if fut.done():
                         if self.debug:
                             logger.debug(f"Remove ExecNode {id_} from the graph")
-                        self.handle_exception(graph, fut, id_)
+                        # surfaces unexpected exceptions raised outside ExecNode.execute's
+                        # own error handling (node failures are stored in result, not raised)
+                        fut.result()
+                        # 1.1 if id_ failed, prune its whole doomed subtree instead of
+                        # submitting each descendant just to see it fail on a missing dependency
+                        if (
+                            node_dict[id_].result is not None
+                            and node_dict[id_].result["state"] == -1
+                        ):
+                            descendants = nx.descendants(graph, id_)
+                            if self.debug:
+                                logger.debug(
+                                    f"Pruning {len(descendants)} descendants of failed ExecNode {id_}"
+                                )
+                            for d in descendants:
+                                d_node = node_dict[d]
+                                if d_node.state != 1:
+                                    now = datetime.now().strftime("%Y-%m-%d, %H:%M:%S")
+                                    d_node.result = {
+                                        "result": None,
+                                        "state": 0,
+                                        "message": "Did not run",
+                                        "initial_time": now,
+                                        "final_time": now,
+                                        "duration": "0 sec",
+                                    }
+                                    d_node.state = 0
+                                ready.discard(d)
+                            graph.remove_nodes_from(descendants)
+                        # successors whose last dependency was id_ become ready
+                        successors = list(graph.successors(id_))
                         graph.remove_node(id_)
+                        submitted_ids.discard(id_)
+                        for successor in successors:
+                            if graph.in_degree(successor) == 0:
+                                ready.add(successor)
 
-                # 2. list the root nodes that aren't being executed
-                runnable_nodes_ids = list(set(graph.root_nodes()) - set(futures.keys()))
+                # 2. the `ready` set holds the root nodes that aren't being executed
 
                 # 3. if no runnable node exist, go to step 6 (wait for a node to finish)
                 #   (This **might** create a new root node)
-                if len(runnable_nodes_ids) == 0:
+                if len(ready) == 0:
                     if self.debug:
                         logger.debug("No runnable Nodes available")
                     continue
@@ -479,7 +515,7 @@ class DAG:
                 # 4. choose a node to run
                 # 4.1 get the most prioritized node to run
                 # 4.1.1 get all the nodes that have the highest priority
-                runnable_nodes = [node_dict[node_id] for node_id in runnable_nodes_ids]
+                runnable_nodes = [node_dict[node_id] for node_id in ready]
                 highest_priority_nodes = get_highest_priority_nodes(runnable_nodes)
 
                 # 4.1.2 get the node with the highest compound priority
@@ -495,7 +531,7 @@ class DAG:
                 # (maybe with a higher priority) has been created => continue the loop
                 # Note: This step might run a number of times in the while loop
                 #       before the exec_node gets submitted
-                num_running_threads = get_num_running_threads(futures)
+                num_running_threads = get_num_running_threads(running)
                 if exec_node.is_sequential and num_running_threads != 0:
                     if self.debug:
                         logger.debug(
@@ -521,15 +557,19 @@ class DAG:
 
                 running.add(exec_future)
                 futures[exec_node.id] = exec_future
+                ready.discard(exec_node.id)
+                submitted_ids.add(exec_node.id)
 
                 # 5.2 wait for the sequential node to finish
                 # TODO: not sure this code ever runs
                 if exec_node.is_sequential:
                     wait(futures.values(), return_when=ALL_COMPLETED)
+        # single atomic reassignment: with concurrent runs, the last one to
+        # finish wins; each caller still gets its own results via the return value
         self.node_dict = node_dict
 
         if self.draw:
-            self._draw()
+            self._draw(node_dict, dt_string)
 
         # nodes pruned by leaves_ids never ran and have no result
         states = [
@@ -539,14 +579,4 @@ class DAG:
         if states and (min(states) != 1) and (self.error_type_fatal):
             raise ValueError("DAG did not finished as expected")
 
-        return self
-
-    def handle_exception(
-        self, graph: DiGraphEx, fut: "Future[Any]", id_: Hashable
-    ) -> None:
-        """
-        This simply raise an error if any
-
-        """
-
-        _res = fut.result()  # noqa: F841
+        return node_dict

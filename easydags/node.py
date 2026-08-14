@@ -152,11 +152,6 @@ class ExecNode:
         if debug:
             logger.debug(f"Start executing {self.id} with task {self.exec_function}")
 
-        kwargs = {
-            node_dict[dep_hash].argument_name: node_dict[dep_hash].result["result"]
-            for dep_hash in self.depends_on_hard
-        }
-
         prev_states = [
             node_dict[dep_hash].result["state"] for dep_hash in self.depends_on
         ]
@@ -169,6 +164,10 @@ class ExecNode:
             result["message"] = "Did not run"
             self.state = 0
         else:
+            kwargs = {
+                node_dict[dep_hash].argument_name: node_dict[dep_hash].result["result"]
+                for dep_hash in self.depends_on_hard
+            }
             for trial in range(self.n_trials):
                 try:
                     result["result"] = self.exec_function(**kwargs)
