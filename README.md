@@ -612,7 +612,7 @@ dag.execute() # if there is an error we wont raise an exception because error_ty
 
 #### Running your dag since your last checkpoint
 
-This is a very important feature of this library, the dag object stores the states of the nodes after one execution... if you run/execute your dag for a second time we will only run the nodes that failed or that did not run in the previous execution. As an example you can execute the following code (Please note that when a node wont run you will see the follwing message: "{self.id} already in finished state, wont run")
+This is a very important feature of this library, the dag object stores the states of the nodes after one execution... if you run/execute your dag with `resume=True` we will only run the nodes that failed or that did not run in the previous execution (by default, `dag.execute()` always runs every node fresh). As an example you can execute the following code (Please note that when a node wont run you will see the follwing message: "{self.id} already in finished state, wont run")
 
 ```python
 from easydags import  ExecNode, DAG
@@ -695,6 +695,10 @@ nodes = [node0, node1, node3, node2]
 dag = DAG(nodes,name = 'Ensemble example2',max_concurrency=3, debug = False)
 
 dag.execute()
+
+# re-run from the last checkpoint: nodes that finished successfully
+# are skipped and keep their previous result
+dag.execute(resume=True)
     
 
 ```

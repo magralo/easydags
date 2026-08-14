@@ -9,7 +9,7 @@ long_description = (this_directory / "README.md").read_text()
 setup(
   name = 'easydags',
   packages = find_packages(exclude=['tests', 'tests.*']),
-  version = '1.1.0',
+  version = '2.0.0',
   description = 'Dags made easy',
   author = 'Mateo Graciano',
   author_email = 'magralo@gmail.com',
@@ -19,7 +19,6 @@ setup(
           'pydantic>=2.0',
           'pydantic-settings>=2.0',
           'loguru>=0.7.0',
-          'matplotlib>=3.8.0',
           'pyvis>=0.3.2'
       ],
   long_description=long_description,
@@ -31,6 +30,7 @@ setup(
       'Programming Language :: Python :: 3.11',
       'Programming Language :: Python :: 3.12',
       'Programming Language :: Python :: 3.13',
+      'Programming Language :: Python :: 3.14',
       'License :: OSI Approved :: MIT License',
       'Operating System :: OS Independent',
   ],

@@ -1,11 +1,9 @@
 import functools
 from typing import Any, Callable, Optional
 
-from easydags import DAG
-from easydags.errors import ErrorStrategy
-
 from . import node
 from .config import Cfg
+from .dag import DAG
 from .node import LazyExecNode, exec_nodes_lock
 
 
@@ -13,7 +11,7 @@ from .node import LazyExecNode, exec_nodes_lock
 def op(
     id_,
     func: Optional[Callable[..., Any]] = None,
-    depends_on=[],
+    depends_on=None,
     *,
     priority: int = 0,
     argument_name: Optional[str] = None,
@@ -56,7 +54,7 @@ def to_dag(
     declare_dag_function: Optional[Callable[..., Any]] = None,
     *,
     max_concurrency: int = 1,
-    behavior: ErrorStrategy = ErrorStrategy.strict,
+    error_type_fatal: bool = True,
 ) -> Callable[..., Any]:
     """
     Transform the declared ops into a DAG that can be executed by tawazi.
@@ -70,7 +68,7 @@ def to_dag(
         if the functions are decorated with @op decorator they can be executed in parallel.
         Otherwise, they will be executed immediately. Currently mixing the two behaviors isn't supported.
         max_concurrency: the maximum number of concurrent threads to execute in parallel
-        behavior: the behavior of the dag when an error occurs during the execution of a function (ExecNode)
+        error_type_fatal: whether the whole run should fail if at least one node fails
     Returns: a DAG instance
 
     """
@@ -82,7 +80,9 @@ def to_dag(
                 node.exec_nodes = []
                 _func(*args, **kwargs)
                 d = DAG(
-                    node.exec_nodes, max_concurrency=max_concurrency, behavior=behavior
+                    node.exec_nodes,
+                    max_concurrency=max_concurrency,
+                    error_type_fatal=error_type_fatal,
                 )
                 node.exec_nodes = []
 
