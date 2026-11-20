@@ -475,7 +475,19 @@ class DAG:
                             node_dict[id_].result is not None
                             and node_dict[id_].result["state"] == -1
                         ):
-                            descendants = nx.descendants(graph, id_)
+                            # only through blocking edges: a node that allows the failure
+                            # of its dependency (allow_failure_of) is not doomed by it
+                            descendants = set()
+                            stack = [id_]
+                            while stack:
+                                current = stack.pop()
+                                for s in graph.successors(current):
+                                    if (
+                                        s not in descendants
+                                        and current not in node_dict[s].allow_failure_of
+                                    ):
+                                        descendants.add(s)
+                                        stack.append(s)
                             if self.debug:
                                 logger.debug(
                                     f"Pruning {len(descendants)} descendants of failed ExecNode {id_}"
@@ -494,9 +506,14 @@ class DAG:
                                     }
                                     d_node.state = 0
                                 ready.discard(d)
-                            graph.remove_nodes_from(descendants)
-                        # successors whose last dependency was id_ become ready
-                        successors = list(graph.successors(id_))
+                        else:
+                            descendants = set()
+                        # successors whose last dependency was id_ (or a pruned node) become ready
+                        successors = set(graph.successors(id_))
+                        for d in descendants:
+                            successors.update(graph.successors(d))
+                        successors -= descendants
+                        graph.remove_nodes_from(descendants)
                         graph.remove_node(id_)
                         submitted_ids.discard(id_)
                         for successor in successors:

@@ -39,6 +39,7 @@ class ExecNode:
         priority: int = 0,
         n_trials: int = 1,
         is_sequential: bool = Cfg.TAWAZI_IS_SEQUENTIAL,
+        allow_failure_of: Optional[List[Hashable]] = None,
     ):
         """
         Args:
@@ -46,6 +47,8 @@ class ExecNode:
             exec_function (Callable, optional): a callable will be executed in the graph.
             This is useful to make Joining ExecNodes (Nodes that enforce dependencies on the graph)
             depends_on (list): a list of ExecNodes' ids that must be executed beforehand.
+            allow_failure_of (list, optional): ids among the dependencies that only need to be finished:
+                this ExecNode still runs if they failed or did not run.
             argument_name (str): The name of the argument used by ExecNodes that depend on this ExecNode.
             priority (int, optional): priority compared to other ExecNodes;
                 the higher the number the higher the priority.
@@ -61,6 +64,7 @@ class ExecNode:
         depends_on_soft = list(depends_on_soft) if depends_on_soft is not None else []
         self.depends_on = depends_on_hard + depends_on_soft
         self.depends_on_hard = depends_on_hard
+        self.allow_failure_of = list(allow_failure_of) if allow_failure_of is not None else []
         self.priority: int = priority
         self.compound_priority: int = priority
         self.n_trials: int = n_trials
@@ -153,7 +157,9 @@ class ExecNode:
             logger.debug(f"Start executing {self.id} with task {self.exec_function}")
 
         prev_states = [
-            node_dict[dep_hash].result["state"] for dep_hash in self.depends_on
+            node_dict[dep_hash].result["state"]
+            for dep_hash in self.depends_on
+            if dep_hash not in self.allow_failure_of # dependencies in allow_failure_of only need to be finished, whatever their state
         ]
 
         result = {}
@@ -199,6 +205,31 @@ class ExecNode:
         if debug:
             logger.debug(f"Finished executing {self.id} with task {self.exec_function}")
         return result
+
+
+class allow_failure:
+    """
+    Marks the upstream side of a dependency as allowed to fail:
+
+        allow_failure(a) > b    # b runs once a is finished, even if a failed or did not run
+        a > c                   # c still needs a to succeed
+
+    Works with both > (soft) and >> (hard). The failure of a is still recorded in its result.
+    """
+
+    def __init__(self, node: ExecNode):
+        self.node = node
+
+    def _allow(self, other: ExecNode) -> None:
+        other.allow_failure_of = other.allow_failure_of + [self.node.id]
+
+    def __gt__(self, other: ExecNode):
+        self._allow(other)
+        return self.node > other
+
+    def __rshift__(self, other: ExecNode):
+        self._allow(other)
+        return self.node >> other
 
 
 class PreComputedExecNode(ExecNode):
