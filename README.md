@@ -610,6 +610,28 @@ dag = DAG(nodes,name = 'gray example',
 dag.execute() # if there is an error we wont raise an exception because error_type_fatal= False 
 ```
 
+#### Allowing a dependency to fail
+
+Sometimes B should run after A, but it is ok if A fails (for example B can work with the old version of the table that A updates)... in that case you can use >= instead of > when you define the soft dependency:
+
+- A>=B B depends on A (soft), but B runs even if A fails
+
+```python
+node0 >= node1 # node1 runs when node0 is finished, even if node0 failed or did not run
+node0 > node2 # node2 still needs node0 to succeed
+```
+
+This is defined per dependency: in the example, if node0 fails then node1 runs and node2 does not. The failure of node0 is still reported (red in the html output and the exception from the execute method).
+
+This is only for soft dependencies: a hard dependency needs the output of the node. You can also use the depends_on_soft_allow_failure parameter of the ExecNode:
+
+```python
+ExecNode(id_= 'f1',
+              exec_function = example1,
+              depends_on_soft_allow_failure= ['f0'] # f1 runs when f0 is finished, even if f0 fails
+              )
+```
+
 #### Running your dag since your last checkpoint
 
 This is a very important feature of this library, the dag object stores the states of the nodes after one execution... if you run/execute your dag with `resume=True` we will only run the nodes that failed or that did not run in the previous execution (by default, `dag.execute()` always runs every node fresh). As an example you can execute the following code (Please note that when a node wont run you will see the follwing message: "{self.id} already in finished state, wont run")

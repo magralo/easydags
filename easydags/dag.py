@@ -225,6 +225,14 @@ class DAG:
                 edges = [(dep, node_id) for dep in dependencies]
                 self.graph_ids.add_edges_from(edges)
 
+        # Check: a hard dependency needs the output of the node, it can not be allowed to fail
+        for exec_node in self.exec_nodes:
+            both = set(exec_node.depends_on_hard) & set(exec_node.depends_on_soft_allow_failure)
+            if both:
+                raise ValueError(
+                    f"{exec_node.id} has hard dependencies that are also allowed to fail: {both}"
+                )
+
         # check for circular dependencies
         cycle = self.find_cycle()
         if cycle:
@@ -475,7 +483,19 @@ class DAG:
                             node_dict[id_].result is not None
                             and node_dict[id_].result["state"] == -1
                         ):
-                            descendants = nx.descendants(graph, id_)
+                            # only through blocking edges: a node that allows the failure
+                            # of its dependency (depends_on_soft_allow_failure) is not doomed by it
+                            descendants = set()
+                            stack = [id_]
+                            while stack:
+                                current = stack.pop()
+                                for s in graph.successors(current):
+                                    if (
+                                        s not in descendants
+                                        and current not in node_dict[s].depends_on_soft_allow_failure
+                                    ):
+                                        descendants.add(s)
+                                        stack.append(s)
                             if self.debug:
                                 logger.debug(
                                     f"Pruning {len(descendants)} descendants of failed ExecNode {id_}"
@@ -494,9 +514,14 @@ class DAG:
                                     }
                                     d_node.state = 0
                                 ready.discard(d)
-                            graph.remove_nodes_from(descendants)
-                        # successors whose last dependency was id_ become ready
-                        successors = list(graph.successors(id_))
+                        else:
+                            descendants = set()
+                        # successors whose last dependency was id_ (or a pruned node) become ready
+                        successors = set(graph.successors(id_))
+                        for d in descendants:
+                            successors.update(graph.successors(d))
+                        successors -= descendants
+                        graph.remove_nodes_from(descendants)
                         graph.remove_node(id_)
                         submitted_ids.discard(id_)
                         for successor in successors:

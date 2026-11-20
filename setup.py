@@ -9,7 +9,7 @@ long_description = (this_directory / "README.md").read_text()
 setup(
   name = 'easydags',
   packages = find_packages(exclude=['tests', 'tests.*']),
-  version = '2.0.0',
+  version = '2.1.0',
   description = 'Dags made easy',
   author = 'Mateo Graciano',
   author_email = 'magralo@gmail.com',

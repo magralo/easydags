@@ -6,6 +6,6 @@ from .config import Cfg
 """
 easydags is package that allows you to build and deploy dags in a pretty simple manner.
 """
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 __all__ = ["ExecNode", "DAG", "op", "to_dag", "Cfg", 'search_nodes']
