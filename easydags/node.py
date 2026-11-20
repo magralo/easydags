@@ -39,7 +39,7 @@ class ExecNode:
         priority: int = 0,
         n_trials: int = 1,
         is_sequential: bool = Cfg.TAWAZI_IS_SEQUENTIAL,
-        allow_failure_of: Optional[List[Hashable]] = None,
+        depends_on_soft_allow_failure: Optional[List[Hashable]] = None,
     ):
         """
         Args:
@@ -47,7 +47,7 @@ class ExecNode:
             exec_function (Callable, optional): a callable will be executed in the graph.
             This is useful to make Joining ExecNodes (Nodes that enforce dependencies on the graph)
             depends_on (list): a list of ExecNodes' ids that must be executed beforehand.
-            allow_failure_of (list, optional): ids among the dependencies that only need to be finished:
+            depends_on_soft_allow_failure (list, optional): soft dependencies that only need to be finished:
                 this ExecNode still runs if they failed or did not run.
             argument_name (str): The name of the argument used by ExecNodes that depend on this ExecNode.
             priority (int, optional): priority compared to other ExecNodes;
@@ -62,9 +62,10 @@ class ExecNode:
 
         depends_on_hard = list(depends_on_hard) if depends_on_hard is not None else []
         depends_on_soft = list(depends_on_soft) if depends_on_soft is not None else []
-        self.depends_on = depends_on_hard + depends_on_soft
+        depends_on_soft_allow_failure = list(depends_on_soft_allow_failure) if depends_on_soft_allow_failure is not None else []
+        self.depends_on = depends_on_hard + depends_on_soft + depends_on_soft_allow_failure
         self.depends_on_hard = depends_on_hard
-        self.allow_failure_of = list(allow_failure_of) if allow_failure_of is not None else []
+        self.depends_on_soft_allow_failure = depends_on_soft_allow_failure
         self.priority: int = priority
         self.compound_priority: int = priority
         self.n_trials: int = n_trials
@@ -116,7 +117,7 @@ class ExecNode:
 
     def __ge__(self, other):
         # soft dependency that is allowed to fail: other runs even if self failed or did not run
-        other.allow_failure_of = other.allow_failure_of + [self.id]
+        other.depends_on_soft_allow_failure = other.depends_on_soft_allow_failure + [self.id]
 
         aux = self._add_soft_dependency(other)
 
@@ -167,7 +168,7 @@ class ExecNode:
         prev_states = [
             node_dict[dep_hash].result["state"]
             for dep_hash in self.depends_on
-            if dep_hash not in self.allow_failure_of # dependencies in allow_failure_of only need to be finished, whatever their state
+            if dep_hash not in self.depends_on_soft_allow_failure # these only need to be finished, whatever their state
         ]
 
         result = {}

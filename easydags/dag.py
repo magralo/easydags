@@ -225,6 +225,14 @@ class DAG:
                 edges = [(dep, node_id) for dep in dependencies]
                 self.graph_ids.add_edges_from(edges)
 
+        # Check: a hard dependency needs the output of the node, it can not be allowed to fail
+        for exec_node in self.exec_nodes:
+            both = set(exec_node.depends_on_hard) & set(exec_node.depends_on_soft_allow_failure)
+            if both:
+                raise ValueError(
+                    f"{exec_node.id} has hard dependencies that are also allowed to fail: {both}"
+                )
+
         # check for circular dependencies
         cycle = self.find_cycle()
         if cycle:
@@ -476,7 +484,7 @@ class DAG:
                             and node_dict[id_].result["state"] == -1
                         ):
                             # only through blocking edges: a node that allows the failure
-                            # of its dependency (allow_failure_of) is not doomed by it
+                            # of its dependency (depends_on_soft_allow_failure) is not doomed by it
                             descendants = set()
                             stack = [id_]
                             while stack:
@@ -484,7 +492,7 @@ class DAG:
                                 for s in graph.successors(current):
                                     if (
                                         s not in descendants
-                                        and current not in node_dict[s].allow_failure_of
+                                        and current not in node_dict[s].depends_on_soft_allow_failure
                                     ):
                                         descendants.add(s)
                                         stack.append(s)

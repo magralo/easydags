@@ -623,13 +623,12 @@ node0 > node2 # node2 still needs node0 to succeed
 
 This is defined per dependency: in the example, if node0 fails then node1 runs and node2 does not. The failure of node0 is still reported (red in the html output and the exception from the execute method).
 
-This is only for soft dependencies (a hard dependency needs the output of the node). You can also use the allow_failure_of parameter of the ExecNode:
+This is only for soft dependencies: a hard dependency needs the output of the node. You can also use the depends_on_soft_allow_failure parameter of the ExecNode:
 
 ```python
 ExecNode(id_= 'f1',
               exec_function = example1,
-              depends_on_soft= ['f0'],
-              allow_failure_of= ['f0'] # f1 runs even if f0 fails
+              depends_on_soft_allow_failure= ['f0'] # f1 runs when f0 is finished, even if f0 fails
               )
 ```
 

@@ -74,10 +74,25 @@ def test_allowed_dependency_that_succeeds():
 
 def test_constructor_argument():
     a = ExecNode(id_='a', exec_function=fail)
-    b = ExecNode(id_='b', exec_function=ok, depends_on_soft=['a'], allow_failure_of=['a'])
+    b = ExecNode(id_='b', exec_function=ok, depends_on_soft_allow_failure=['a'])
     c = ExecNode(id_='c', exec_function=ok, depends_on_soft=['a'])
 
     assert run([a, b, c]) == {'a': -1, 'b': 1, 'c': 0}
+
+
+def test_hard_dependency_can_not_be_allowed_to_fail():
+    a = ExecNode(id_='a', exec_function=fail)
+    b = ExecNode(id_='b', exec_function=ok, depends_on_hard=['a'],
+                 depends_on_soft_allow_failure=['a'])
+    with pytest.raises(ValueError):
+        DAG([a, b], name='allow failure', debug=False, draw=False)
+
+    a = ExecNode(id_='a', exec_function=fail)
+    b = ExecNode(id_='b', exec_function=ok)
+    a >> b
+    a >= b
+    with pytest.raises(ValueError):
+        DAG([a, b], name='allow failure', debug=False, draw=False)
 
 
 def test_failure_is_still_fatal():
