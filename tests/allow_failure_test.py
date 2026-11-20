@@ -4,7 +4,7 @@ sys.path.insert(0, myPath + '/../')
 
 import pytest
 
-from easydags import ExecNode, DAG, allow_failure
+from easydags import ExecNode, DAG
 
 
 def ok(**kwargs):
@@ -24,7 +24,7 @@ def run(nodes, max_concurrency=3):
 def test_allowed_failure_does_not_block():
     a = ExecNode(id_='a', exec_function=fail)
     b = ExecNode(id_='b', exec_function=ok)
-    allow_failure(a) > b
+    a >= b
 
     assert run([a, b]) == {'a': -1, 'b': 1}
 
@@ -34,7 +34,7 @@ def test_same_upstream_blocks_other_edges():
     b = ExecNode(id_='b', exec_function=ok)
     c = ExecNode(id_='c', exec_function=ok)
     d = ExecNode(id_='d', exec_function=ok)
-    allow_failure(a) > b
+    a >= b
     a > c
     c > d
 
@@ -45,7 +45,7 @@ def test_other_blocking_dependency_still_blocks():
     a = ExecNode(id_='a', exec_function=fail)
     x = ExecNode(id_='x', exec_function=fail)
     b = ExecNode(id_='b', exec_function=ok)
-    allow_failure(a) > b
+    a >= b
     x > b
 
     assert run([a, x, b]) == {'a': -1, 'x': -1, 'b': 0}
@@ -58,7 +58,7 @@ def test_allowed_dependency_that_did_not_run():
     c = ExecNode(id_='c', exec_function=ok)
     d = ExecNode(id_='d', exec_function=ok)
     a > b
-    allow_failure(b) > c
+    b >= c
     c > d
 
     assert run([a, b, c, d], max_concurrency=1) == {'a': -1, 'b': 0, 'c': 1, 'd': 1}
@@ -67,23 +67,9 @@ def test_allowed_dependency_that_did_not_run():
 def test_allowed_dependency_that_succeeds():
     a = ExecNode(id_='a', exec_function=ok)
     b = ExecNode(id_='b', exec_function=ok)
-    allow_failure(a) > b
+    a >= b
 
     assert run([a, b]) == {'a': 1, 'b': 1}
-
-
-def test_hard_dependency_gets_none():
-    received = {}
-
-    def consume(**kwargs):
-        received.update(kwargs)
-
-    a = ExecNode(id_='a', exec_function=fail, output_name='a_out')
-    b = ExecNode(id_='b', exec_function=consume)
-    allow_failure(a) >> b
-
-    assert run([a, b]) == {'a': -1, 'b': 1}
-    assert received == {'a_out': None}
 
 
 def test_constructor_argument():
@@ -97,7 +83,7 @@ def test_constructor_argument():
 def test_failure_is_still_fatal():
     a = ExecNode(id_='a', exec_function=fail)
     b = ExecNode(id_='b', exec_function=ok)
-    allow_failure(a) > b
+    a >= b
 
     dag = DAG([a, b], name='allow failure', debug=False, draw=False)
     with pytest.raises(ValueError):

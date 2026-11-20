@@ -1,4 +1,4 @@
-from .node import ExecNode,search_nodes,allow_failure  # the rest child classes are hidden from the outside
+from .node import ExecNode,search_nodes  # the rest child classes are hidden from the outside
 from .dag import DAG
 from .ops import op, to_dag
 from .config import Cfg
@@ -8,4 +8,4 @@ easydags is package that allows you to build and deploy dags in a pretty simple 
 """
 __version__ = "2.1.0"
 
-__all__ = ["ExecNode", "DAG", "op", "to_dag", "Cfg", 'search_nodes', 'allow_failure']
+__all__ = ["ExecNode", "DAG", "op", "to_dag", "Cfg", 'search_nodes']

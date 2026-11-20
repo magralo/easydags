@@ -114,6 +114,14 @@ class ExecNode:
 
         return aux
 
+    def __ge__(self, other):
+        # soft dependency that is allowed to fail: other runs even if self failed or did not run
+        other.allow_failure_of = other.allow_failure_of + [self.id]
+
+        aux = self._add_soft_dependency(other)
+
+        return aux
+
     def _add_hard_dependency(self, other):
         depends_on = other.depends_on.copy()
         depends_on_hard = other.depends_on_hard.copy()
@@ -205,31 +213,6 @@ class ExecNode:
         if debug:
             logger.debug(f"Finished executing {self.id} with task {self.exec_function}")
         return result
-
-
-class allow_failure:
-    """
-    Marks the upstream side of a dependency as allowed to fail:
-
-        allow_failure(a) > b    # b runs once a is finished, even if a failed or did not run
-        a > c                   # c still needs a to succeed
-
-    Works with both > (soft) and >> (hard). The failure of a is still recorded in its result.
-    """
-
-    def __init__(self, node: ExecNode):
-        self.node = node
-
-    def _allow(self, other: ExecNode) -> None:
-        other.allow_failure_of = other.allow_failure_of + [self.node.id]
-
-    def __gt__(self, other: ExecNode):
-        self._allow(other)
-        return self.node > other
-
-    def __rshift__(self, other: ExecNode):
-        self._allow(other)
-        return self.node >> other
 
 
 class PreComputedExecNode(ExecNode):
